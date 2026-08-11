@@ -156,7 +156,6 @@ export const en: Record<MessageKey, Message> = {
 
   // --- playing ------------------------------------------------------------
   'play.previousHole': 'Previous hole',
-  'play.nextHole': 'Next hole',
   'play.hole': 'Hole {number}',
   'play.par': 'Par',
   'play.noScore': 'no score yet',

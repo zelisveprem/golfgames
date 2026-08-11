@@ -807,22 +807,25 @@ button {
   color: var(--tee-color);
 }
 
-.setup-player-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+/* Černá vlaječka na tmavém pozadí appky splývala do neviditelna - u
+   odpaliště, které má definovaný kontrastní odstín (zatím jen černá),
+   se ikona obrátí do něj. */
+.tee-dot.tee-option-black svg {
+  color: var(--tee-contrast);
 }
 
+/* HCP sedí přímo vedle jména, ne na vlastním řádku pod ním - to bylo
+   opticky rozpadnuté (velké prázdné pole daleko od jména). */
 .setup-player-handicap {
-  flex: 0 0 86px;
-  width: 86px;
+  flex: 0 0 64px;
+  width: 64px;
+  text-align: center;
 }
 
 .setup-player-strokes {
+  margin: 0;
   color: var(--text-dim);
-  font-size: 13px;
-  margin-inline-start: auto;
+  font-size: 12px;
 }
 
 /* Výběr odpaliště: délka, norma a hlavně kolik ran z něj hráč dostane. */
@@ -1009,20 +1012,6 @@ button {
   gap: 10px;
 }
 
-.nav-arrow {
-  width: var(--tap);
-  height: var(--tap);
-  border-radius: 12px;
-  background: var(--bg-elevated);
-  font-size: 26px;
-  line-height: 1;
-  color: var(--text);
-}
-
-.nav-arrow:disabled {
-  opacity: 0.3;
-}
-
 .hole-title {
   display: flex;
   flex-direction: column;
@@ -1088,8 +1077,11 @@ button {
   font-size: 13px;
 }
 
+/* Šipky pro předchozí/další jamku zmizely z hlavičky (jsou v patičce),
+   takže tu je teď víc místa - jméno se ořezávalo na 72px i tam, kde
+   se celé pohodlně vejde. */
 .game-header-entry span {
-  max-width: 72px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

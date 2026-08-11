@@ -665,7 +665,6 @@ function AppShell() {
       onGoToHole={goToHole}
       onFinish={finishRound}
       onShowResults={() => setView('results')}
-      onOpenAccount={() => setView('account')}
     />
   )
 }

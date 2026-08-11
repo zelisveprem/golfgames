@@ -59,7 +59,6 @@ interface Props {
   onGoToHole: (hole: number) => void
   onFinish: () => void
   onShowResults: () => void
-  onOpenAccount: () => void
 }
 
 /**
@@ -77,7 +76,6 @@ export default function PlayScreen({
   onGoToHole,
   onFinish,
   onShowResults,
-  onOpenAccount,
 }: Props) {
   const t = useT()
   // Na dotyku běží vždy jen jedno přidržení, takže stačí jeden ref pro celou
@@ -312,15 +310,6 @@ export default function PlayScreen({
         }`}
       >
         <div className="hole-nav">
-          <button
-            type="button"
-            className="nav-arrow"
-            onClick={() => onGoToHole(hole - 1)}
-            disabled={hole === 0}
-            aria-label={t('play.previousHole')}
-          >
-            ‹
-          </button>
           <div className="hole-center">
             <div className="hole-title">
               <span
@@ -351,15 +340,6 @@ export default function PlayScreen({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className="nav-arrow"
-            onClick={() => onGoToHole(hole + 1)}
-            disabled={isLastHole}
-            aria-label={t('play.nextHole')}
-          >
-            ›
-          </button>
         </div>
       </header>
 
@@ -517,26 +497,34 @@ export default function PlayScreen({
               {t('play.finish')}
             </button>
           )}
-          <button type="button" className="link-button" onClick={onOpenAccount}>
-            {t('play.account')}
-          </button>
         </div>
       </main>
 
       <footer className="app-footer">
-        {isLastHole ? (
-          <button type="button" className="primary-button" onClick={finish}>
-            {t('play.finishAndSave')}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => onGoToHole(hole + 1)}
-          >
-            {holeDone ? t('play.next') : t('play.skip')}
-          </button>
-        )}
+        <div className="footer-row">
+          {hole > 0 && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => onGoToHole(hole - 1)}
+            >
+              {t('play.previousHole')}
+            </button>
+          )}
+          {isLastHole ? (
+            <button type="button" className="primary-button" onClick={finish}>
+              {t('play.finishAndSave')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => onGoToHole(hole + 1)}
+            >
+              {holeDone ? t('play.next') : t('play.skip')}
+            </button>
+          )}
+        </div>
       </footer>
 
       {bonusFor && (

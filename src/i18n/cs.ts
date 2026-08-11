@@ -171,7 +171,6 @@ export const cs = {
 
   // --- zápis skóre --------------------------------------------------------
   'play.previousHole': 'Předchozí jamka',
-  'play.nextHole': 'Další jamka',
   'play.hole': 'Jamka {number}',
   'play.par': 'Par',
   'play.noScore': 'zatím bez zápisu',

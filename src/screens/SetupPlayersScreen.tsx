@@ -211,6 +211,16 @@ export default function SetupPlayersScreen({
                       value={names[i] ?? ''}
                       onChange={(e) => onNameChange(i, e.target.value)}
                     />
+                    {netScoring && (
+                      <input
+                        className="name-input value-input setup-player-handicap"
+                        type="text"
+                        inputMode="decimal"
+                        value={handicapText[i] ?? ''}
+                        onChange={(e) => onHandicapTextChange(i, e.target.value)}
+                        aria-label={t('setup.handicapFor', { name: displayName(i) })}
+                      />
+                    )}
                     {teeOptions.length > 0 && (
                       <button
                         type="button"
@@ -224,21 +234,11 @@ export default function SetupPlayersScreen({
                     )}
                   </div>
                   {netScoring && (
-                    <div className="setup-player-meta">
-                      <input
-                        className="name-input value-input setup-player-handicap"
-                        type="text"
-                        inputMode="decimal"
-                        value={handicapText[i] ?? ''}
-                        onChange={(e) => onHandicapTextChange(i, e.target.value)}
-                        aria-label={t('setup.handicapFor', { name: displayName(i) })}
-                      />
-                      <span className="setup-player-strokes">
-                        {strokes === undefined
-                          ? t('setup.noHandicap')
-                          : t('setup.strokesGiven', { count: strokes })}
-                      </span>
-                    </div>
+                    <p className="setup-player-strokes">
+                      {strokes === undefined
+                        ? t('setup.noHandicap')
+                        : t('setup.strokesGiven', { count: strokes })}
+                    </p>
                   )}
                 </div>
               )

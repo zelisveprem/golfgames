@@ -7,6 +7,28 @@ Patch verzi zvedá `scripts/bump-version.mjs` automaticky při každém lokáln�
 buildu, takže čísla patch verzí mezi záznamy nejsou souvislá. Zapisují se sem
 jen verze s věcnou změnou.
 
+## [0.40.7] – 2026-08-11
+
+### Změněno
+
+- **HCP pole hráče je vedle jména, ne na vlastním řádku pod ním.** Krok
+  Hráči vypadal po zapnutí „Hrát na rány s handicapem" opticky rozpadnutě
+  - jméno na jednom řádku, velké HCP pole daleko od něj na dalším. Teď
+    jsou jméno, HCP a odpaliště na jednom řádku, počet ran zůstává jako
+    malá poznámka pod ním.
+- **Zápis skóre: šipky na předchozí/další jamku zmizely z hlavičky.**
+  Uvolnily místo pro průběžné skóre, které se tam předtím oříznuté na
+  72px skoro nedalo přečíst - teď má 160px. Navigace mezi jamkami je
+  nově v patičce jako tlačítka Předchozí/Další: na první jamce jen
+  Další, jinak obojí.
+- **Zápis skóre: odkaz „Účet a záloha" pryč.** Do zápisu skóre nepatřil,
+  na účet a zálohu vede menu.
+
+### Opraveno
+
+- **Černá vlaječka odpaliště nebyla na tmavém pozadí appky vidět.**
+  Barva ikony se teď u černého odpaliště obrátí do světlého odstínu.
+
 ## [0.40.6] – 2026-08-10
 
 ### Změněno
