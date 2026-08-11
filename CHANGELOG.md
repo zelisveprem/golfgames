@@ -7,6 +7,24 @@ Patch verzi zvedá `scripts/bump-version.mjs` automaticky při každém lokáln�
 buildu, takže čísla patch verzí mezi záznamy nejsou souvislá. Zapisují se sem
 jen verze s věcnou změnou.
 
+## [0.40.8] – 2026-08-11
+
+### Přidáno
+
+- **Výchozí odpaliště uloženého hráče.** Obrazovka Hráči má teď u
+  každého hráče stejnou vlaječku jako zakládání kola - klepnutím se
+  vybere barva odpaliště, ze kterého hráč obvykle hraje, a rovnou se
+  uloží. Bez preference je vlaječka neutrálně šedá.
+
+### Změněno
+
+- **Domů: Poslední hry místo Poslední hra (jednotné číslo).** Zobrazuje
+  posledních 5 kol místo jednoho, u každého hra, datum a hřiště
+  v titulku a kdo proti komu hrál (u týmových her dvojice, jinak
+  všichni hráči) v popisku.
+- **HCP pole v Hráčích zúženo** na míru dvěma číslicím a desetině,
+  stejně jako v kroku Hráči při zakládání kola.
+
 ## [0.40.7] – 2026-08-11
 
 ### Změněno

@@ -358,6 +358,12 @@ button {
 
 /* O odstín světlejší než karta Home, do které je vnořené (`--bg-input`
    místo `--bg-elevated`) - jinak by splynulo s podkladem. */
+.home-round-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .home-card {
   display: flex;
   flex-direction: column;
@@ -557,8 +563,10 @@ button {
 }
 
 .players-hcp {
-  flex: 0 0 64px;
+  flex: 0 0 46px;
   min-width: 0;
+  padding: 0 6px;
+  text-align: center;
 }
 
 .players-remove {
@@ -816,9 +824,12 @@ button {
 
 /* HCP sedí přímo vedle jména, ne na vlastním řádku pod ním - to bylo
    opticky rozpadnuté (velké prázdné pole daleko od jména). */
+/* HCP je nejvýš dvě číslice a desetina (54, 7,5, 12,2) - nepotřebuje
+   šířku běžného pole. */
 .setup-player-handicap {
-  flex: 0 0 64px;
-  width: 64px;
+  flex: 0 0 46px;
+  width: 46px;
+  padding: 0 6px;
   text-align: center;
 }
 
@@ -2587,6 +2598,18 @@ button {
 .pick-row-label {
   flex: 1;
   min-width: 0;
+}
+
+/* Barevná vlaječka u volby odpaliště v PickSheetu (výchozí odpaliště
+   hráče) - stejná barevná logika jako .tee-dot, jen bez rámečku. */
+.pick-row-tee-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--tee-color, var(--text-dim));
+}
+
+.pick-row-tee-icon.tee-option-black {
+  color: var(--tee-contrast);
 }
 
 .sr-only {
