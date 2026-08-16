@@ -536,6 +536,21 @@ chrání (bod 3). `settingsGameId` a `editingCourseId` navíc obrazovka čte, je
 když `view` sedí na dané podobrazovce, takže zůstat jim chvíli neaktuální po
 odchodu nevadí.
 
+**Gesto zpět si appka obsluhuje sama (`src/swipeBack.ts`).** Zápis do historie
+sám o sobě nestačí: nainstalovaná PWA běží ve `display: standalone`, kde iOS
+ani Android nedávají appce systémové gesto zpět a není tam ani lišta
+prohlížeče se šipkou. V prohlížeči gesto funguje, v appce na ploše ne - a
+protože se appka na plochu instalovat má, byla každá obrazovka bez tlačítka
+Zpět slepá ulička. Tažení od levého okraje proto poslouchá appka sama a mapuje
+ho na `history.back()`. Gesto se vypíná na výchozí obrazovce (odtud by
+znamenalo opuštění appky) a nespustí se, když tah začne uvnitř něčeho, co se
+samo posouvá do stran - scorekarta na telefonu sahá až k okraji displeje.
+
+**Tlačítko Zpět má i první krok nového kola.** `CoursePickerScreen` ho zprvu
+schovával s odůvodněním, že v prvním kroku není kam se vracet. To neplatí:
+vede se sem z domovské obrazovky, kde je menu s účtem, zálohou i archivem -
+bez tlačítka se z výběru hřiště nedalo dostat nikam.
+
 **Důsledek.** Appku teď zpět opustí jedině z kořenové obrazovky - odkudkoli
 jinde naviguje o krok zpátky uvnitř appky. Bude to důležité i při zabalení
 appky do Capacitoru/TWA pro App Store a Google Play, kde nativní
@@ -651,6 +666,317 @@ potvrzením. U dohraného kola (kolo je bezpečně v archivu) zůstávají „Up
 skóre" a „Nové kolo" rovnocenná tlačítka jako dřív - tam žádné riziko ztráty
 dat není.
 
+## 30. Appka se jmenuje Fairsome
+
+**Kontext.** Pracovní jméno „Golf Games" popisovalo, co appka dělá, ale
+nedalo se pod ním nic postavit: je to obecné spojení, na ploše telefonu
+vypadá jako složka a v katalogu hřišť i v zálohách se objevovalo jako
+značka, kterou nikdo nezvolil.
+
+**Rozhodnutí.** Appka se jmenuje **Fairsome**. Dva překrývající se kruhy ve
+wordmarku narážejí na „-some" (twosome, foursome - běžná golfová slova pro
+počet hráčů ve skupině), „Fair" na fairway i na poctivou hru.
+
+**Kde všude jméno je.** Manifest PWA (`name`, `short_name` ve
+`vite.config.ts` - tohle je to, co telefon nabídne při ukládání na plochu),
+`<title>` a `apple-mobile-web-app-title` v `index.html`, úvodní obrazovka
+před načtením appky, texty v `src/i18n/` (nabídka instalace, chybová hláška
+u zálohy, kredit katalogu hřišť), obrazovka soukromí a `public/soukromi.html`.
+Wordmark na `HomeScreen` je jediné místo, kde jméno není text, ale značka.
+
+**Co se nepřejmenovává.** `BACKUP_FORMAT` v `backup.ts` zůstává
+`'golfgames-backup'` - je to marker uvnitř souboru zálohy a přejmenování by
+znamenalo, že appka odmítne všechny dosud vytvořené zálohy. Jméno souboru
+(`fairsome-zaloha-*.json`) se změnit smí, protože import se řídí markerem,
+ne názvem. Repozitář, npm balíček ani doména se nepřejmenovávají - je to
+zbytečný zásah do nasazení za nulový přínos pro uživatele.
+
+## 31. Archivní kolo se opravuje na místě
+
+**Kontext.** Detail odehraného kola (`ResultsScreen` s `readOnly`) byl jen ke
+čtení. Opravit skóre šlo jedině u kola, které bylo zároveň to rozehrané -
+tlačítkem „Upravit skóre", které kolu smaže `finishedAt` a vrátí ho do zápisu.
+Jenže hraje se o peníze a skóre se dopočítává i po hře: přehlédnutý zápis,
+špatně sečtená jamka, dodatečně přiznaný Longest. Kdo mezitím založil další
+kolo, měl archiv zamčený.
+
+**Rozhodnutí.** Detail archivního kola nabízí „Upravit skóre" a otevře **ten
+samý `PlayScreen`** jako na hřišti (`editing` prop). Opravuje se skóre, extra
+body, par i setup jamky - stejná pravidla, stejné ovládání, žádná druhá
+obrazovka na to samé.
+
+**Zapisuje se přímo do archivu, ne do rozehraného kola.** Na hřišti se dá
+dohrávat jedno kolo a zpětně opravovat jiné; kdyby oprava zabrala slot
+rozehraného kola, přišlo by se o rozehranou hru. `App.tsx` proto posílá změny
+přes `updateRound()`, které míří buď na `round`, nebo na záznam v archivu -
+podle toho, jestli je otevřená oprava. Které kolo se opravuje, se **neukládá
+do vlastního stavu**, ale odvozuje z `view === 'archiveEdit'` a
+`openArchiveId`; jinak by se po zpět/swipe (obnovuje se jen `NavSnapshot`)
+editace rozešla s tím, co je vidět. Když je opravované kolo zároveň to
+rozehrané (typicky právě dohraná hra), zapíše se do obojího - jinak by se po
+restartu appky vrátila neopravená verze.
+
+**`archiveRound()` se na opravu nepoužívá.** Staví kolo na začátek archivu,
+což je správné při ukládání dohraného kola, ale u opravy by se rok stará hra
+vytáhla na první místo v archivu a na domovskou obrazovku jako „poslední
+odehraná". Oprava proto jde přes `updateArchivedRound()`, které kolo přepíše
+na jeho místě.
+
+**Kolo zůstává dohrané.** Oprava `finishedAt` nemaže, takže se kolo nikdy
+nevrátí do stavu „rozehrané" a v archivu ani v peněžním vyrovnání nezmizí.
+Tlačítko v patičce se proto nejmenuje „Ukončit kolo", ale „Hotovo, zpět do
+archivu" - ukládá se průběžně a není co potvrzovat. Chybějící jamky se u
+opravy nevypisují: u odehraného kola je to informace bez rozhodnutí.
+
+**Ukládá se každá změna, ne až odchod.** Stejné pravidlo jako u rozehraného
+kola - appku může telefon zabít kdykoli a data drží jen `localStorage`.
+Synchronizaci se oprava hlásí jen když se opravdu změnila data
+(`updatedAt`), takže listování jamkami v archivu nic do cloudu neposílá.
+
+## 32. Obrazovka je vysoká jako displej, roluje se obsah
+
+**Kontext.** Obrazovka byla vysoká podle obsahu, posouvala se celá stránka
+a patička s hlavním tlačítkem se držela dole přes `position: sticky`.
+V prohlížeči to fungovalo. V nainstalované PWA na iOS ne: při tažení prstem
+se patička odlepila, zůstala stát doprostřed displeje a překryla obsah pod
+sebou. Sticky patička je na iOS posouvaná kompozitorem podle omezení
+spočítaného při layoutu, takže jakákoli změna výšky dokumentu pod rukou
+(přepnutí způsobu vyrovnání, dorolování na konec) ji nechá na místě, kde
+zůstat nemá.
+
+**Rozhodnutí.** `.screen` je vysoká `100dvh` s `overflow: hidden` a roluje se
+jen `.content` uvnitř. Hlavička i patička jsou obyčejné položky flexu, které
+nemá co posunout - pod nimi se nikdy nic neposouvá. Je to rozvržení
+aplikace, ne webové stránky, což je přesně to, co appka na hřišti má být.
+
+**Co to mění.** Hlavička zůstává vidět pořád, takže tlačítko zpět v jejím
+levém rohu je dosažitelné i uprostřed dlouhé scorekarty - dřív odrolovalo
+z displeje. Nová obrazovka vždycky začíná na svém začátku (dřív si stránka
+nesla posuv z té předchozí). V prohlížeči zůstane lišta s adresou trvale
+rozbalená, protože stránka nemá čím rolovat - v nainstalované PWA, což je
+cílový režim, žádná není.
+
+**Kdo o posuvu ví.** `window.scrollY` je vždycky nula. Obnovení posuvu při
+návratu z podobrazovky zakládání kola proto čte `scrollTop` na `.content`
+(`contentScroller()` v `App.tsx`) a testy rozvržení mají
+`scrollContentToEnd()` v `e2e/helpers.ts`. Kontrola vodorovného přetečení měří
+kromě stránky i `.content` - přeteklý prvek by roztáhl do šířky jeho, ne
+stránku, a test by o něm mlčel.
+
+## 33. Společný míč se ukládá oběma partnerům
+
+**Kontext.** Foursome hraje dvojice jedním míčem, takže na jamku má jediné
+skóre. `Round.scores` je ale mapa **po hráčích** a je to invariant, na kterém
+stojí archiv, synchronizace i všechny ostatní hry.
+
+**Zvažované varianty.** Nové pole `Round.teamScores` by znamenalo migraci
+uložených kol a majoritní verzi kvůli jedné hře. Uložit skóre jen prvnímu
+partnerovi je horší: chybějící zápis u druhého znamená v celé aplikaci
+„vzdaná jamka“, takže by partner vzdával každou jamku kola a předčasně
+ukončené kolo by hlásilo nesmysly.
+
+**Rozhodnutí.** Hodnota se ukládá **oběma partnerům**. Zajišťuje to
+`App.setScore()` podle `GameDefinition.sharedBall`, takže se o to nestará ani
+hra, ani obrazovka - a mazání zápisu přidržením funguje stejně. Data zůstávají
+ve stejném tvaru, takže starý archiv i cloud fungují bez migrace.
+
+**Co z toho plyne pro UI.** Dva stejné sloupce ve scorekartě by z karty dělaly
+hádanku („hrál každý pět, nebo dvojice jednou pět?“), takže při `sharedBall`
+má dvojice jeden sloupec pojmenovaný po ní a jeden řádek v zápisu skóre.
+Celkové rány dvojice se čtou přes prvního partnera - jsou u obou stejné.
+
+**Netto** dvojice stojí na `pairPlayingHandicap()`: polovina součtu hracích
+handicapů obou partnerů, zaokrouhlená na celé rány (WHS pro foursome). Půl
+rány na jamce neexistuje, proto se zaokrouhluje handicap, ne výsledek.
+
+## 34. Dva zápasy v jednom flightu se nemíchají
+
+**Kontext.** Čtyři hráči v jednom flightu často hrají dvě samostatné jamkovky
+1 na 1. Appka do té doby umožňovala jen hry, ve kterých celý flight hraje
+jednu hru.
+
+**Rozhodnutí.** Nová hra „Dvě jamkovky 1 na 1“ používá `Round.teams` jako
+**soupeře jednoho zápasu**, ne jako partnery (`pairingKind: 'opponents'`).
+Model kola se tím nemění a zakládání kola používá stejnou volbu dvojic, jen
+pod jménem Soupeři a se čtením „Mac vs. Michal“.
+
+**Peníze každý zápas zvlášť.** `settleRound()` počítá zůstatky každý proti
+každému, což by ve dvou nezávislých zápasech znamenalo platby přes hry, které
+spolu nemají nic společného. Hra proto deklaruje `settlementGroups()` a
+vyrovnání spočítá `settleGroups()` - každá skupina sama za sebe, výsledky se
+slepí do jednoho přehledu. Tvar výsledku zůstává stejný, takže obrazovka
+výsledků nic dalšího neřeší.
+
+**Rozehraná jamka je vlastnost zápasu, ne flightu.** Konvence „na jamce
+zapsal aspoň jeden hráč, tedy jamka běží a komu zápis chybí, ten ji vzdal“
+platí v celé aplikaci a pro jednu společnou hru je správná. U dvou zápasů by
+ale zápis prvního udělal ze druhého vzdanou jamku pro oba jeho hráče, dokud
+nezapíšou. Jamka proto běží podle dvou hráčů daného zápasu.
+
+**Pořadí ve výsledkové tabulce** je podle vyhraných jamek celého flightu, i
+když se dva zápasy poměřovat nedají. Je to jediné pořadí, které mají výsledky
+a archiv společné, a skutečný výsledek zápasu je hned u řádku (`1 UP`, `AS`)
+včetně jména soupeře. Dvě samostatné tabulky by tuhle informaci rozdělily a
+peněžní vyrovnání by ztratilo jediný podklad.
+
+## 35. Dvojice mají vlastní krok a jdou změnit i v rozehraném kole
+
+**Kontext.** Volba dvojic byla sekce pod seznamem her v kroku „Hra a dvojice"
+(#29). Na telefonu se pod sedm her nevešla bez rolování, a hlavně: jakmile
+kolo začalo, nedalo se k ní vrátit. Přitom se dvojice na jamce mění častěji
+než cokoli jiného - někdo dojde později, hráči se přeskupí po první devítce.
+
+Zpět z rozehraného kola navíc **mazalo data**. Kroky zakládání zůstaly
+v historii prohlížeče, ale `startRound()` po založení rozepsané kolo uklidí,
+takže zpět/swipe přistálo na kroku s prázdnými jmény a výchozí hrou - a
+tlačítko „Začít kolo" pak rozehrané kolo i se zapsaným skóre přepsalo novým
+prázdným. Gesto zpět a tlačítko zpět na tom byly stejně, protože obojí končí
+v `history.back()`.
+
+**Rozhodnutí.** Tři věci dohromady:
+
+1. **Dvojice jsou vlastní krok** (`SetupPairingScreen`), v řadě kroků mezi
+   hrou a sázkou. Objeví se jen tam, kde je co dělit (čtyři hráči a hra ve
+   dvojicích), takže u dvou hráčů řada kroků zůstává stejná. Krok „Hra"
+   ukazuje zvolené dvojice na řádku a odkazuje na ně.
+2. **Kroky se dají otevřít i z rozehraného kola** - odkazem „Dvojice"
+   (u dvou jamkovek „Soupeři", u her jednotlivců „Hra") pod zápisem skóre,
+   nebo šipkou zpět u čísla jamky: na první jamce není kam listovat, takže
+   místo nečinné šipky vede na nastavení kola.
+   Obrazovky pak nečtou rozepsané kolo, ale **přímo `Round`**: volba se
+   uplatní hned na kolo a nemá s čím se rozejít. Patička nekončí krokem
+   „Další", ale „Zpět ke hře".
+3. **Krok zakládání platí jen pro svůj stav.** `NavSnapshot` si nese
+   `setupRoundId`: `null` znamená rozepsané nové kolo (platí jen dokud žádné
+   jiné neexistuje), id znamená úpravu nastavení toho kola (platí, dokud kolo
+   běží). Neplatný krok z historie skončí tam, kam patří stav kola - zápis
+   skóre, výsledky, domovská obrazovka. Krok v historii zůstává, takže další
+   zpět pokračuje dál a appka jde nakonec opustit.
+
+**Změna dvojic přepočítá kolo od začátku a nikdy nesmaže skóre.** Všechny hry
+počítají výsledek ze `Round.scores` až při zobrazení, takže „přepočítat" tady
+neznamená žádnou migraci dat: stačí přepsat `Round.teams` a výsledek i peníze
+se spočítají znovu, i pro jamky zapsané dřív. Zapsané skóre je při tom
+nedotknutelné (nepřekročitelné pravidlo 11 v `AGENTS.md`) - `applyRoundGame()`
+mění jen `gameId`, `teams` a nastavení bodování nové hry.
+
+**Změna hry ano, změna hráčů a hřiště ne.** Hra se v rozehraném kole měnit dá
+(„říkali jsme skins, ale hrajeme jamkovku") a je to bezpečné - skóre zůstává,
+dvojice se podle nové hry postaví nebo zruší. Jména, handicapy, odpaliště,
+hřiště a počet jamek se zatím měnit nedají: obrazovky hráčů a odpališť staví
+handicapy z katalogu hřišť a z výřezu devítek, který si kolo nepamatuje
+(`Round.course` je snímek, ne volba). Ubrání hráče by navíc znamenalo smazat
+jeho skóre, což pravidlo 11 zakazuje. Je to otevřená otázka níž, ne opomenutí.
+
+**Proč `PAIRINGS` a přepočet nejsou v obrazovce.** `src/roundSetup.ts` drží
+rozdělení hráčů do dvojic, jejich čtení z kola (`pairingIndexOf()`) i změnu
+nastavení rozehraného kola. Dřív byla tabulka dvojic v `SetupGameScreen` a
+uplatňovala se v `SetupBetScreen` - dvě obrazovky se tak musely shodnout na
+významu jednoho indexu. Teď je to čistá funkce nad `Round`, otestovaná
+v `roundSetup.test.ts`, a obrazovky ji jen volají.
+
+## 36. Krátké jméno a jeden řádek na zápas v hlavičce jamky
+
+**Kontext.** Hlavička jamky ukazovala u dvou jamkovek ve flightu „kdo s kým
+hraje → kdo vede": `Alexandra vs. M… → Alexandra 2 UP`. S opravdovými jmény
+se to uřízlo na obojí straně a poznámka pod stavy (`dormie · zbývají 2 jamky`)
+patřila jednomu z zápasů, ale nebylo poznat kterému. Dlouhé jméno navíc
+v řádku hráče vytlačilo tečky handicapu a zisk z jamky úplně mimo displej,
+protože jméno i značky byly v jednom oříznutém prvku.
+
+**Rozhodnutí.** V hlavičce je jeden řádek na zápas: `Alexandra 2 UP dormie`.
+Soupeře ukazuje blok zápasu pod tím, takže se v hlavičce nemusí opakovat -
+a stav zápasu se naopak přestal opakovat v bloku. Poznámka je součástí řádku
+zápasu (`HeaderSummary.entries[].note`), zbývající jamky platí pro celý flight
+a zůstávají jednou pod nimi.
+
+**Jméno se zkracuje, informace ne.** `shortPlayerName()` bere první slovo
+jména (a při shodě přidá iniciálu dalšího), protože „Alexandra" je čitelnější
+než „Alexandra Pánik…". V řádku hráče se zkracuje jen text jména; tečky
+handicapu, značky bonusů a zisk z jamky mají `flex: 0 0 auto` a nezmizí nikdy -
+právě ony jsou při zápisu skóre ta informace, kvůli které se na řádek koukáš.
+
+**Odkazy pod zápisem skóre jsou kratší.** Přidání odkazu na nastavení kola by
+řádek odkazů zalomilo na dva a zápis čtyř hráčů by přerostl displej
+(nepřekročitelné pravidlo 10). Místo výjimky z pravidla se zkrátily popisky:
+„Výsledky", „Dvojice", „Ukončit", „Účet". Čtyři odkazy se tak vejdou na jeden
+řádek i se zapsaným skóre - dřív se na dva lámaly už tři.
+
+## 37. Extra body jako vedlejší sázka
+
+**Kontext.** O extra body (Longest, Nearest, bunker, voda, barkie, arnie) se
+dalo hrát jen u her, které samy rozdávají body: Best + Součet, Levá-Pravá
+a Skins si je počítaly do svého skóre. Jamkovka, Foursome, dvě jamkovky,
+Stableford ani Dots je nenabízely vůbec, protože do jejich jednotek přičíst
+nejdou - bunker přilepený k vyhraným jamkám by rozbil stav zápasu (`2 UP` už
+by neznamenalo dvě jamky) a ve Stablefordu by tvrdil, že hráč nastřílel body
+proti paru. Na hřišti se přitom o Longest hraje bez ohledu na to, jaká hra
+zrovna běží.
+
+**Rozhodnutí.** Extra body se od téhle verze nabízejí **u každé hry**. Tam,
+kde je hra neumí vzít do svého bodování, jsou **vedlejší sázka**
+(`src/games/sideBets.ts`):
+
+1. **Vlastní tabulka „Extra body"** ve výsledcích. Hlavní tabulka zůstává tím,
+   co spočítala hra - pořadí v jamkovce drží vyhrané jamky, ne bunkery.
+2. **Body vstupují do peněžního vyrovnání** té samé hry přes nový
+   `GameDefinition.settlementParties()`. Hodnota bodu je v kole jedna, takže
+   vyhraná jamka a extra bod mají stejnou cenu; u dvou jamkovek ve flightu se
+   sázka vyrovnává v rámci zápasu (rozhodnutí #34 platí dál), u dvojic mezi
+   dvojicemi.
+3. **Výchozí hodnoty jsou nulové.** `loadGameOptions()` je u her s vedlejší
+   sázkou nastaví na nulu, takže dokud si někdo hodnotu nezadá, appka se chová
+   úplně jako dřív - tlačítko s hvězdičkou se u zápisu skóre ani nenabídne.
+   Hry, které extra body počítaly odjakživa, si nechávají hodnoty z katalogu,
+   aby se nikomu nezměnilo rozehrané ani archivní kolo.
+
+**Proč ne přičtení do hlavní tabulky.** Bylo by to o jeden soubor méně, ale
+tabulka by lhala: `rankRows()` řadí podle `row.value`, takže hráč, který zápas
+prohrál a nasbíral bunkery, by v jamkovce skončil první. `valueLabel` navíc
+u jamkovky ukazuje `2 UP` - text a číslo by si přestaly odpovídat.
+
+**Proč jedna hodnota bodu na všechno.** Kolo má jedinou sázku (`pointValue`),
+takže „jamka za 50 a Longest za 100" by znamenalo druhou hodnotu v modelu
+kola a migraci. Stejného výsledku se dosáhne hodnotou extra bodu: Longest za
+dvojnásobek jamky je prostě `2`.
+
+**Volba „Uplatňovat HCP" a co všechno je bonus za výsledek.** Násobič za
+výsledek stál odjakživa na brutto výsledku (viz nejčastější zdroje chyb
+v `AGENTS.md`), zatímco body za birdie a eagle v Best + Součtu se počítaly
+netto. Dvě různá pravidla pro „co je birdie" v jedné hře nikdo neuhádne -
+otázka „proč má dvojice tři body, když nikdo nedal birdie?" přišla hned při
+prvním netto kole. Volba `multipliersWithHandicap` (v nastavení bodování hry
+pod násobiči, **výchozí vypnuto**) proto rozhoduje o **všech** bonusech za
+výsledek: birdie a eagle dvojice, násobič extra bodů i „birdie" u smetení
+v Dots. Rozhoduje o tom jediná funkce `bonusDiffToPar()` v `handicap.ts`;
+každý další výpočet bonusu se musí ptát jí. Kvůli tomu se `playerBonusPoints()`
+přestěhoval z `types.ts` do `handicap.ts`: osobní par se bez rozdělení ran
+spočítat nedá.
+
+**Co volba nemění.** Kdo jamku vyhrál - `BEST`, součet, skin, jamkovka, pořadí
+v Dots, body ve Stablefordu - se v netto kole počítá z netto ran vždycky. Netto
+je způsob, jak hrát proti sobě s různým handicapem; bonus za výsledek je
+naopak odměna za skutečně zahranou jamku, a právě tam se hráči rozcházejí.
+
+**Archiv si nechává pravidlo, se kterým se hrálo.** Dohrané kolo bez volby
+v uložených datech se hrálo v době, kdy se birdie počítalo netto vždycky -
+`normalizeRound()` mu proto volbu doplní jako zapnutou. Nová výchozí hodnota
+platí pro kola založená potom. Bez toho by se archivu zpětně změnily body
+i peníze, které jsou dávno vyrovnané.
+
+**Rozpis bodů u jamky.** Aby se stejná otázka nemusela luštit znovu, dodává hra
+`holeBreakdown()`: každý zdroj bodů zvlášť, s číslem, ze kterého se rozhodovalo,
+a s nulami u bonusů, které se nepočítaly. V řádku u jamky zůstávají jen tři
+čísla (BEST, součet, body) a modré „i" vedle nich otevře celý rozpis - názvy
+jako „Bunker (sandie)" řádek zalomily na dva a zápis skóre pak u čtyř hráčů
+přerostl displej. Obrazovka o pravidlech pořád nic neví - jen vykreslí, co
+dostane.
+
+**Nepotvrzený Longest u vedlejší sázky propadá.** V týmové hře přechází na
+soupeřovu dvojici, ale ve Stablefordu nebo Dots žádná soupeřova strana není -
+a rozdávat propadlý bod „všem ostatním" by z vedlejší sázky udělalo další
+pravidlo. Výpočet je proto stejný jako u Skins, které to řeší od začátku.
+
 ---
 
 ## Otevřené otázky
@@ -666,6 +992,11 @@ Věci, o kterých padlo rozhodnutí je odložit:
 - **Extra body v dalších hrách.** Best + Součet a Skins je vyhodnocují,
   Match play je záměrně nepoužívá. Nová hra musí rozsah deklarovat přes
   `GameDefinition.scoringOptions`.
+- **Změna hráčů a hřiště v rozehraném kole.** Hra a dvojice se změnit dají
+  (#35), jména, handicapy a odpaliště ne. Kolo si nepamatuje volbu devítek ani
+  odkaz do katalogu hřišť, ze kterých se hrací handicapy počítaly, takže by se
+  musely brát ze snímku `Round.course` - a ubrání hráče by znamenalo smazat
+  jeho skóre, což pravidlo 11 zakazuje.
 - **Sdílená kola mezi hráči.** Synchronizace dnes zálohuje data jednoho účtu.
   Aby viděli kolo všichni zúčastnění, potřebovalo by se řešit pozvání,
   oprávnění a souběžný zápis – to je řádově větší úloha než dnešní zrcadlo.

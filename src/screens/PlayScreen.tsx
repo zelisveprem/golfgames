@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { BonusId, Player, PlayerId, Round } from '../types'
 import {
   MAX_STROKES,
+  availableBonuses,
   bonusesAt,
   formatHoleList,
   getBonus,
-  playerBonusPoints,
   formatToPar,
   holeNumber,
   holesPlayed,
@@ -19,10 +19,17 @@ import {
   teamName,
   teamPlayers,
 } from '../types'
+import type { Team } from '../types'
 import { getGame } from '../games'
-import type { HoleSetup, HoleSetupSelection } from '../games'
-import { exclusiveBonusOutcome, strokesReceived } from '../handicap'
+import type { HoleBreakdown, HoleSetup, HoleSetupSelection } from '../games'
+import {
+  exclusiveBonusOutcome,
+  pairStrokesReceived,
+  playerBonusPoints,
+  strokesReceived,
+} from '../handicap'
 import BonusSheet from './BonusSheet'
+import PointsSheet from './PointsSheet'
 import Scorecard from './Scorecard'
 import { useT } from '../i18n'
 
@@ -52,6 +59,11 @@ function useMobileLandscape(): boolean {
 
 interface Props {
   round: Round
+  /**
+   * Dodatečná oprava odehraného kola. Zapisuje se do archivu, ne do
+   * rozehraného kola, takže se kolo neukončuje - jen se oprava zavře.
+   */
+  editing?: boolean
   onSetScore: (playerId: PlayerId, hole: number, value: number | null) => void
   onToggleBonus: (playerId: PlayerId, hole: number, bonusId: BonusId) => void
   onSetPar: (hole: number, par: number) => void
@@ -59,6 +71,8 @@ interface Props {
   onGoToHole: (hole: number) => void
   onFinish: () => void
   onShowResults: () => void
+  /** Nastavení rozehraného kola - hra a dvojice. Chybí při opravě archivu. */
+  onOpenSetup?: () => void
 }
 
 /**
@@ -69,6 +83,7 @@ interface Props {
  */
 export default function PlayScreen({
   round,
+  editing = false,
   onSetScore,
   onToggleBonus,
   onSetPar,
@@ -76,6 +91,7 @@ export default function PlayScreen({
   onGoToHole,
   onFinish,
   onShowResults,
+  onOpenSetup,
 }: Props) {
   const t = useT()
   // Na dotyku běží vždy jen jedno přidržení, takže stačí jeden ref pro celou
@@ -86,6 +102,8 @@ export default function PlayScreen({
   })
   // Hráč, pro kterého je otevřený výběr extra bodů.
   const [bonusFor, setBonusFor] = useState<Player | null>(null)
+  // Strana, pro kterou je otevřený rozpis bodů jamky.
+  const [breakdownFor, setBreakdownFor] = useState<string | null>(null)
   const showLandscapeScorecard = useMobileLandscape()
   const game = getGame(round.gameId)
   const hole = round.currentHole
@@ -98,9 +116,40 @@ export default function PlayScreen({
   const headerSummary = game.headerSummary?.(round, hole)
   const holeSetup: HoleSetup | undefined = game.holeSetup?.(round, hole)
   const scoreEntryEnabled = holeSetup?.complete ?? true
-  const hasBonusOptions = game.scoringOptions.bonusIds.length > 0
+  /**
+   * Nabízí se na téhle jamce vůbec nějaký extra bod?
+   *
+   * Nestačí, že je hra zná: u her, kde jsou extra body vedlejší sázka, mají
+   * ve výchozím stavu nulovou hodnotu, takže by tlačítko otevíralo prázdný
+   * panel a v zápisu čtyř hráčů by zabíralo místo pro nic.
+   */
+  const hasBonusOptions = availableBonuses(round, hole).some((bonus) =>
+    game.scoringOptions.bonusIds.includes(bonus.id),
+  )
+  // Foursome zapisuje jedno skóre za dvojici, ne za hráče - řádek je proto
+  // jeden na dvojici a ovládá společný míč.
+  const sharedBall = game.sharedBall === true && round.teams.length > 0
   // Shrnutí, které nepatří konkrétní dvojici, ale celé jamce (Skins, singles).
   const gameSummary = summaries.find((s) => s.id === '_game')
+  /**
+   * Rozpis bodů jamky, pokud ho hra umí. „Proč máme tři body" se z hlavičky
+   * dvojice přečíst nedá, takže vedle ní stojí modré „i".
+   */
+  // Z první jamky nevede šipka na předchozí jamku, ale na nastavení kola.
+  // U opravy archivního kola se nikam neodbočuje, tam zůstává nečinná.
+  const backToSetup = hole === 0 && onOpenSetup !== undefined
+  const breakdowns: HoleBreakdown[] = game.holeBreakdown?.(round, hole) ?? []
+  const openedBreakdown = breakdowns.find((entry) => entry.id === breakdownFor)
+  /**
+   * Popisek odkazu na nastavení kola. Pojmenovává to, co se za ním dá změnit -
+   * a je krátký záměrně: „Hra a dvojice" zalomí řádek odkazů na dva a zápis
+   * skóre se pak u čtyř hráčů přestane vejít na jednu obrazovku.
+   */
+  const setupLabel = game.usesTeams(round.players.length)
+    ? game.pairingKind === 'opponents'
+      ? t('singles.opponents')
+      : t('setup.pairs')
+    : t('setup.game')
 
   useEffect(() => {
     // Výběr bonusu by v přehledu překryl scorekartu a nejde v něm pokračovat
@@ -144,6 +193,13 @@ export default function PlayScreen({
    * se přitom vzdané jamky od těch, na které se vůbec nedošlo.
    */
   function finish() {
+    // Oprava archivního kola se ukládá průběžně, takže tlačítko jen zavírá
+    // zápis - vypisovat u odehraného kola chybějící jamky by nemělo co nabídnout.
+    if (editing) {
+      onFinish()
+      return
+    }
+
     const { conceded, unplayed, complete } = roundCompleteness(round)
     if (complete) {
       onFinish()
@@ -201,8 +257,10 @@ export default function PlayScreen({
     return (
       <li key={player.id} className="player-row">
         <div className="player-info">
+          {/* Jméno se zkracuje, značky ne: u dlouhého jména by se jinak tečky
+              handicapu ani zisk z jamky nevešly a zmizely by úplně. */}
           <span className="player-name">
-            {player.name}
+            <span className="player-name-text">{player.name}</span>
             {marks.map((mark) => (
               <span key={mark.key} className={`player-mark ${mark.tone}`}>
                 {mark.text}
@@ -219,7 +277,11 @@ export default function PlayScreen({
               </span>
             ))}
             {/* Rány, které hráč na téhle jamce dostává. Bez toho není poznat,
-                proč má za stejný počet ran jiný výsledek než soupeř. */}
+                proč má za stejný počet ran jiný výsledek než soupeř - a proto
+                se počet teček **nesmí** zastropovat: hráč s HCP 54 dostává na
+                nejtěžších jamkách čtyři rány a tři tečky by tvrdily, že mezi
+                ním a soupeřem je o ránu menší rozdíl, než jaký se opravdu
+                počítá. Scorekarta je vypisuje celé odjakživa. */}
             {strokesReceived(round, player.id, hole) > 0 && (
               <span
                 className="player-mark strokes"
@@ -227,7 +289,7 @@ export default function PlayScreen({
                   count: strokesReceived(round, player.id, hole),
                 })}
               >
-                {'•'.repeat(Math.min(3, strokesReceived(round, player.id, hole)))}
+                {'•'.repeat(strokesReceived(round, player.id, hole))}
               </span>
             )}
           </span>
@@ -294,6 +356,99 @@ export default function PlayScreen({
     )
   }
 
+  /**
+   * Řádek dvojice, která hraje jedním míčem.
+   *
+   * Skóre se čte i zapisuje přes prvního partnera; `App.setScore()` ho uloží
+   * oběma, takže je jedno, kdo je v poli první.
+   */
+  function renderBall(team: Team) {
+    const players = teamPlayers(round, team)
+    const first = players[0]
+    if (!first) return null
+
+    const score = scoreAt(round, first.id, hole)
+    const played = holesPlayed(round, first.id)
+    const toPar = strokeTotal(round, first.id) - parForPlayedHoles(round, first.id)
+    const strokes = pairStrokesReceived(round, team.playerIds, hole)
+    const holeGain = summaries.find((s) => s.id === team.id)
+
+    return (
+      <li key={team.id} className="player-row">
+        <div className="player-info">
+          <span className="player-name">
+            <span className="player-name-text">
+              {game.teamLabel?.(round, team) ?? teamName(round, team)}
+            </span>
+            {holeGain?.entries.map((entry) => (
+              <span
+                key={entry.label}
+                className={`player-mark gain${entry.highlight ? ' best' : ''}`}
+                title={entry.label}
+                aria-label={`${entry.label}: ${entry.value}`}
+              >
+                {entry.value}
+              </span>
+            ))}
+            {/* Rány dvojice na téhle jamce - u foursome z poloviny součtu HCP.
+                Vypisují se všechny, viz tečky u hráče výš. */}
+            {strokes > 0 && (
+              <span
+                className="player-mark strokes"
+                title={t('play.strokesReceivedPair', { count: strokes })}
+              >
+                {'•'.repeat(strokes)}
+              </span>
+            )}
+          </span>
+          <span className="player-total">
+            {played === 0
+              ? t('play.noScore')
+              : t('play.total', {
+                  strokes: strokeTotal(round, first.id),
+                  toPar: formatToPar(toPar),
+                })}
+          </span>
+        </div>
+        <div className="stepper">
+          <button
+            type="button"
+            className="step-button"
+            onClick={() => adjust(first.id, -1)}
+            aria-label={t('play.minus', { name: teamName(round, team) })}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            className="score-value"
+            onClick={() => handleScoreTap(first.id)}
+            onPointerDown={() => startLongPress(first.id)}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+            onContextMenu={(e) => e.preventDefault()}
+            aria-label={t('play.score', { name: teamName(round, team) })}
+          >
+            <span
+              className={`mark large ${score === null ? 'empty' : scoreCategory(score, par)}`}
+            >
+              {score ?? '–'}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="step-button"
+            onClick={() => adjust(first.id, 1)}
+            aria-label={t('play.plus', { name: teamName(round, team) })}
+          >
+            +
+          </button>
+        </div>
+      </li>
+    )
+  }
+
   if (showLandscapeScorecard && scoreEntryEnabled) {
     return (
       <div className="landscape-scorecard">
@@ -310,6 +465,17 @@ export default function PlayScreen({
         }`}
       >
         <div className="hole-nav">
+          {/* Na první jamce není kam listovat, ale zpět z ní vede - na krok
+              zakládání kola, odkud se dá změnit hra i dvojice. */}
+          <button
+            type="button"
+            className="nav-arrow"
+            onClick={() => (backToSetup ? onOpenSetup?.() : onGoToHole(hole - 1))}
+            disabled={hole === 0 && !backToSetup}
+            aria-label={backToSetup ? t('play.backToSetup') : t('play.previousHole')}
+          >
+            ‹
+          </button>
           <div className="hole-center">
             <div className="hole-title">
               <span
@@ -321,7 +487,14 @@ export default function PlayScreen({
             </div>
             {headerSummary && (
               <div className={`game-header-summary ${headerSummary.tone ?? 'normal'}`}>
-                <div className="game-header-score">
+                {/* Vlastní poznámka u stavu znamená víc samostatných zápasů
+                    (dva zápasy ve flightu) - pak stojí každý na svém řádku,
+                    aby bylo poznat, koho se dormie týká. */}
+                <div
+                  className={`game-header-score${
+                    headerSummary.entries.some((entry) => entry.note) ? ' stacked' : ''
+                  }`}
+                >
                   {headerSummary.entries.map((entry, index) => (
                     <span
                       key={`${entry.label}-${index}`}
@@ -331,6 +504,9 @@ export default function PlayScreen({
                     >
                       <span>{entry.label}</span>
                       <strong>{entry.value}</strong>
+                      {entry.note && (
+                        <span className="game-header-hint">{entry.note}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -340,6 +516,20 @@ export default function PlayScreen({
               </div>
             )}
           </div>
+          {/* V patičce při opravě archivu není Předchozí/Další (jamky se tam
+              neprochází, oprava se ukládá napřímo) - druhá šipka proto
+              zůstává jen tady. Živá hra prochází jamky patičkou. */}
+          {editing && (
+            <button
+              type="button"
+              className="nav-arrow"
+              onClick={() => onGoToHole(hole + 1)}
+              disabled={isLastHole}
+              aria-label={t('play.nextHole')}
+            >
+              ›
+            </button>
+          )}
         </div>
       </header>
 
@@ -449,10 +639,25 @@ export default function PlayScreen({
                 {entry.label} <strong>{entry.value}</strong>
               </span>
             ))}
+            {/* U dynamických dvojic patří rozpis k celé jamce, ne k bloku. */}
+            {breakdowns.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className="info-button"
+                onClick={() => setBreakdownFor(entry.id)}
+                aria-label={t('breakdown.open', { name: entry.name })}
+                title={entry.name}
+              >
+                i
+              </button>
+            ))}
           </div>
         )}
 
-        {round.teams.length > 0 ? (
+        {sharedBall ? (
+          <ul className="player-list">{round.teams.map(renderBall)}</ul>
+        ) : round.teams.length > 0 ? (
           round.teams.map((team) => {
             const summary = summaries.find((s) => s.id === team.id)
             return (
@@ -461,7 +666,9 @@ export default function PlayScreen({
                 className={`team-block${summary?.winner ? ' winning' : ''}`}
               >
                 <div className="team-header">
-                  <span className="team-name">{teamName(round, team)}</span>
+                  <span className="team-name">
+                    {game.teamLabel?.(round, team) ?? teamName(round, team)}
+                  </span>
                   {summary && (
                     <span className="team-summary">
                       {summary.entries.map((entry) => (
@@ -472,6 +679,20 @@ export default function PlayScreen({
                           {entry.label} <strong>{entry.value}</strong>
                         </span>
                       ))}
+                      {/* Odkud se body vzaly, se z čísel přečíst nedá. */}
+                      {breakdowns.some((entry) => entry.id === team.id) && (
+                        <button
+                          type="button"
+                          className="info-button"
+                          onClick={() => setBreakdownFor(team.id)}
+                          aria-label={t('breakdown.open', {
+                            name: game.teamLabel?.(round, team) ?? teamName(round, team),
+                          })}
+                          title={t('breakdown.title')}
+                        >
+                          i
+                        </button>
+                      )}
                     </span>
                   )}
                 </div>
@@ -487,45 +708,71 @@ export default function PlayScreen({
 
         <p className="hint">{t('play.hint', { par })}</p>
 
-        <div className="link-row">
-          <button type="button" className="link-button" onClick={onShowResults}>
-            {t('play.standings')}
-          </button>
-          {/* Kolo může skončit kdykoli - třeba když přijde bouřka. */}
-          {!isLastHole && anyScore && (
-            <button type="button" className="link-button" onClick={finish}>
-              {t('play.finish')}
+        {/* Při opravě archivního kola se nikam neodbočuje: jamky se prochází
+            šipkami v hlavičce a výsledky jsou tam, odkud se oprava otevřela. */}
+        {!editing && (
+          <div className="link-row">
+            <button type="button" className="link-button" onClick={onShowResults}>
+              {t('play.standings')}
             </button>
-          )}
-        </div>
+            {/* Dvojice se na jamce mění, takže se k jejich volbě dá vrátit
+                i z rozehraného kola. */}
+            {onOpenSetup && (
+              <button type="button" className="link-button" onClick={onOpenSetup}>
+                {setupLabel}
+              </button>
+            )}
+            {/* Kolo může skončit kdykoli - třeba když přijde bouřka. */}
+            {!isLastHole && anyScore && (
+              <button type="button" className="link-button" onClick={finish}>
+                {t('play.finish')}
+              </button>
+            )}
+          </div>
+        )}
       </main>
 
       <footer className="app-footer">
-        <div className="footer-row">
-          {hole > 0 && (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onGoToHole(hole - 1)}
-            >
-              {t('play.previousHole')}
-            </button>
-          )}
-          {isLastHole ? (
-            <button type="button" className="primary-button" onClick={finish}>
-              {t('play.finishAndSave')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => onGoToHole(hole + 1)}
-            >
-              {holeDone ? t('play.next') : t('play.skip')}
-            </button>
-          )}
-        </div>
+        {editing ? (
+          <button type="button" className="primary-button" onClick={finish}>
+            {t('play.saveEdits')}
+          </button>
+        ) : (
+          <div className="footer-row">
+            {hole > 0 && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => onGoToHole(hole - 1)}
+              >
+                {t('play.previousHole')}
+              </button>
+            )}
+            {isLastHole ? (
+              <button type="button" className="primary-button" onClick={finish}>
+                {t('play.finishAndSave')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => onGoToHole(hole + 1)}
+              >
+                {holeDone ? t('play.next') : t('play.skip')}
+              </button>
+            )}
+          </div>
+        )}
       </footer>
+
+      {openedBreakdown && (
+        <PointsSheet
+          round={round}
+          hole={hole}
+          breakdown={openedBreakdown}
+          onClose={() => setBreakdownFor(null)}
+        />
+      )}
 
       {bonusFor && (
         <BonusSheet

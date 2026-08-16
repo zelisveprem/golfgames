@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { BonusId, CreateRoundOptions, PlayerId, Round, RoundSettings } from './types'
-import { createRound, setHolePar, toggleBonus, touchRound } from './types'
+import { createRound, setHolePar, teamOf, toggleBonus, touchRound } from './types'
 import {
   addToRoster,
   archiveRound,
@@ -8,8 +8,10 @@ import {
   loadArchive,
   loadCourses,
   loadCurrentRound,
+  loadGameOptions,
   loadSettings,
   saveCurrentRound,
+  updateArchivedRound,
 } from './storage'
 import type { Course } from './courses/types'
 import PlayScreen from './screens/PlayScreen'
@@ -26,23 +28,41 @@ import PlayersScreen from './screens/PlayersScreen'
 import SetupTeeScreen from './screens/SetupTeeScreen'
 import SetupPlayersScreen from './screens/SetupPlayersScreen'
 import SetupGameScreen from './screens/SetupGameScreen'
+import SetupPairingScreen from './screens/SetupPairingScreen'
 import SetupBetScreen from './screens/SetupBetScreen'
+import { applyRoundGame, pairingIndexOf, pairingLabel } from './roundSetup'
 import { findCourse } from './storage'
 import { AccountProvider, useAccount } from './sync/AccountContext'
+import { useSwipeBack } from './swipeBack'
 import { DEFAULT_GAME_ID, getGame } from './games'
 import type { HoleSetupSelection } from './games'
 
 const MAX_PLAYERS = 4
+
+/**
+ * Posuv obsahu obrazovky.
+ *
+ * Obrazovka je vysoká jako displej a roluje se `.content` uvnitř, ne stránka
+ * (viz `.screen` v `styles.css`), takže `window.scrollY` je vždycky nula.
+ * Vždycky je vidět jedna obrazovka, proto stačí najít její obsah v DOM -
+ * předávat ref přes všechny kroky zakládání kola by jim přidalo prop, která
+ * o obsahu nic neříká.
+ */
+function contentScroller(): Element | null {
+  return document.querySelector('.screen .content')
+}
 
 type View =
   | 'home'
   | 'setupTee'
   | 'setupPlayers'
   | 'setupGame'
+  | 'setupPairing'
   | 'setupBet'
   | 'play'
   | 'results'
   | 'archive'
+  | 'archiveEdit'
   | 'gameSettings'
   | 'backup'
   | 'account'
@@ -52,7 +72,13 @@ type View =
   | 'players'
 
 /** Kroky zakládání kola v pořadí, ve kterém se prochází - hřiště je krok 1, `CoursePickerScreen`. */
-const SETUP_STEP_VIEWS: View[] = ['setupTee', 'setupPlayers', 'setupGame', 'setupBet']
+const SETUP_STEP_VIEWS: View[] = [
+  'setupTee',
+  'setupPlayers',
+  'setupGame',
+  'setupPairing',
+  'setupBet',
+]
 
 /**
  * Kam obrazovka patří podle stavu kola.
@@ -79,6 +105,48 @@ function viewForRound(round: Round | null): View {
 interface NavSnapshot {
   view: View
   openArchiveId: string | null
+  /**
+   * Id kola, jehož nastavení se na kroku zakládání upravuje; `null` znamená
+   * rozepsané nové kolo.
+   *
+   * Bez toho by zpět z rozehraného kola přistálo na krocích s **vynulovaným**
+   * rozepsaným kolem (`startRound` ho po založení uklidí) a tlačítko „Začít
+   * kolo" by rozehrané kolo i se zapsaným skóre přepsalo prázdným.
+   */
+  setupRoundId: string | null
+}
+
+/**
+ * Obrazovka, na které má zpět/swipe skutečně přistát.
+ *
+ * Zakládání kola nemůže platit navěky. Jakmile kolo běží, `startRound` rozepsané
+ * kolo uklidí, takže krok z historie by ukázal prázdná jména a výchozí hru -
+ * a „Začít kolo" by rozehrané kolo i se zapsaným skóre přepsalo prázdným.
+ * Krok zakládání proto platí jen tehdy, když sedí na dnešní stav:
+ *
+ *   `setupRoundId === null` - rozepsané nové kolo, tedy dokud žádné neběží
+ *   `setupRoundId === id`   - úprava nastavení kola, dokud to kolo běží
+ *
+ * Neplatný krok skončí tam, kam patří stav kola (zápis skóre, výsledky,
+ * domovská obrazovka). Krok v historii zůstává, takže další zpět pokračuje
+ * dál a appka jde nakonec opustit.
+ */
+function navTarget(
+  snapshot: NavSnapshot,
+  round: Round | null,
+  pickerMode: 'start' | 'browse',
+): View {
+  const startsNewRound =
+    SETUP_STEP_VIEWS.includes(snapshot.view) ||
+    (snapshot.view === 'coursePicker' && pickerMode === 'start')
+  if (!startsNewRound) return snapshot.view
+
+  // Rozepsané kolo platí, dokud žádné jiné neexistuje - ani dohrané, protože
+  // i to by „Začít kolo" přebilo prázdným.
+  if (snapshot.setupRoundId === null) return round ? viewForRound(round) : snapshot.view
+
+  const live = round && !round.finishedAt ? round : null
+  return snapshot.setupRoundId === live?.id ? snapshot.view : viewForRound(round)
 }
 
 /**
@@ -116,6 +184,26 @@ function AppShell() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>()
   // Uložená hřiště pro kroky zakládání kola; obnoví se po úpravě/stažení.
   const [courses, setCourses] = useState<Course[]>(() => loadCourses())
+  /**
+   * Archivní kolo otevřené k dodatečné opravě. Nedrží se ve vlastním stavu,
+   * ale odvozuje se z obrazovky a otevřeného kola - jinak by se po zpět/swipe
+   * (obnovuje se jen `NavSnapshot`) editace rozešla s tím, co je vidět.
+   */
+  const editedRound =
+    view === 'archiveEdit' && openArchiveId
+      ? archive.find((r) => r.id === openArchiveId)
+      : undefined
+
+  /**
+   * Kolo, jehož nastavení se právě upravuje na krocích zakládání; `null`
+   * znamená rozepsané nové kolo.
+   *
+   * Dvojice se na jamce mění (hráči se přeskupí, někdo dojde později), takže
+   * se ke krokům dá vrátit i z rozehraného kola. Volba se pak uplatní rovnou
+   * na kolo a všechno se přepočítá od první jamky - zapsané skóre se přitom
+   * nikdy nemaže (viz `AGENTS.md`).
+   */
+  const [setupRoundId, setSetupRoundId] = useState<string | null>(null)
 
   // --- rozepsané založení kola ---------------------------------------------
   const [gameId, setGameId] = useState(DEFAULT_GAME_ID)
@@ -149,6 +237,7 @@ function AppShell() {
 
   /** Vrátí rozepsané založení kola na výchozí hodnoty - po startu i po zahození kola. */
   const resetSetupState = useCallback(() => {
+    setSetupRoundId(null)
     setGameId(DEFAULT_GAME_ID)
     setPlayerCount(getGame(DEFAULT_GAME_ID).playerCounts[0] ?? 2)
     setNames(Array(MAX_PLAYERS).fill(''))
@@ -218,9 +307,16 @@ function AppShell() {
   // z historie) od běžné navigace vpřed (stav se zapíše jako nový krok).
   const isPoppingHistory = useRef(false)
   const hasPushedInitialHistory = useRef(false)
+  /**
+   * Aktuální stav pro obsluhu `popstate`. Ta se registruje jednou a musí
+   * vidět dnešní kolo i režim výběru hřiště, aniž by se kvůli každému
+   * zápisu skóre přepisoval posluchač.
+   */
+  const navContext = useRef({ round, pickerMode })
+  navContext.current = { round, pickerMode }
 
   useEffect(() => {
-    const snapshot: NavSnapshot = { view, openArchiveId }
+    const snapshot: NavSnapshot = { view, openArchiveId, setupRoundId }
     if (isPoppingHistory.current) {
       isPoppingHistory.current = false
       return
@@ -233,7 +329,12 @@ function AppShell() {
       return
     }
     window.history.pushState(snapshot, '')
-  }, [view, openArchiveId])
+  }, [view, openArchiveId, setupRoundId])
+
+  // Tažení od levého okraje jako „zpět" - v nainstalované PWA není systémové
+  // gesto ani lišta prohlížeče. Na výchozí obrazovce dané stavem kola se
+  // vypíná: odtud by „zpět" appku opustilo.
+  useSwipeBack(view !== viewForRound(round))
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
@@ -242,9 +343,12 @@ function AppShell() {
       // opravdu opustit, o to se postará prohlížeč sám.
       if (!snapshot) return
       isPoppingHistory.current = true
-      setView(snapshot.view)
+      const { round: current, pickerMode: picker } = navContext.current
+      const target = navTarget(snapshot, current, picker)
+      setView(target)
       setOpenArchiveId(snapshot.openArchiveId)
-      if (SETUP_STEP_VIEWS.includes(snapshot.view)) restoreSetupScroll.current = true
+      setSetupRoundId(target === snapshot.view ? snapshot.setupRoundId : null)
+      if (SETUP_STEP_VIEWS.includes(target)) restoreSetupScroll.current = true
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -255,7 +359,7 @@ function AppShell() {
   }, [])
 
   const openSetupSubscreen = useCallback((nextView: View) => {
-    setupScrollTop.current = window.scrollY
+    setupScrollTop.current = contentScroller()?.scrollTop ?? 0
     restoreSetupScroll.current = true
     setView(nextView)
   }, [])
@@ -264,7 +368,8 @@ function AppShell() {
     if (!SETUP_STEP_VIEWS.includes(view) || !restoreSetupScroll.current) return
     restoreSetupScroll.current = false
     const frame = window.requestAnimationFrame(() => {
-      window.scrollTo({ top: setupScrollTop.current, behavior: 'auto' })
+      const content = contentScroller()
+      if (content) content.scrollTop = setupScrollTop.current
     })
     return () => window.cancelAnimationFrame(frame)
   }, [view])
@@ -292,45 +397,152 @@ function AppShell() {
     [resetSetupState],
   )
 
-  const setScore = useCallback(
-    (playerId: PlayerId, hole: number, value: number | null) => {
-      setRound((prev) => {
-        if (!prev) return prev
-        const holes = [...(prev.scores[playerId] ?? [])]
-        holes[hole] = value
-        return touchRound({ ...prev, scores: { ...prev.scores, [playerId]: holes } })
-      })
+  /**
+   * Kolo, do kterého míří zápis skóre.
+   *
+   * Editace archivního kola nesmí přepsat rozehrané kolo - na hřišti se dá
+   * dohrávat jedno kolo a zpětně opravovat jiné. Mění se proto přímo záznam
+   * v archivu, ne `round`.
+   */
+  const updateRound = useCallback(
+    (update: (target: Round) => Round) => {
+      if (!editedRound) {
+        setRound((prev) => (prev ? update(prev) : prev))
+        return
+      }
+
+      const next = update(editedRound)
+      if (next === editedRound) return
+      updateArchivedRound(next)
+      setArchive((prev) => prev.map((r) => (r.id === next.id ? next : r)))
+      if (round?.id === next.id) {
+        // Právě dohrané kolo je v archivu i jako rozehrané. Bez tohohle by se
+        // po restartu appky vrátila neopravená verze - a synchronizaci
+        // ohlásí změnu efekt nad `round`.
+        setRound(next)
+      } else if (next.updatedAt !== editedRound.updatedAt) {
+        // Listování jamkami čas změny nezvedá, takže není co posílat do cloudu.
+        noteRoundChange(next)
+      }
     },
-    [],
+    [editedRound, round?.id, noteRoundChange],
   )
 
-  const setBonus = useCallback((playerId: PlayerId, hole: number, bonusId: BonusId) => {
-    setRound((prev) =>
-      prev ? touchRound(toggleBonus(prev, playerId, hole, bonusId)) : prev,
-    )
-  }, [])
+  const setScore = useCallback(
+    (playerId: PlayerId, hole: number, value: number | null) => {
+      updateRound((prev) => {
+        // Foursome hraje dvojice jedním míčem, takže jedno číslo patří oběma
+        // partnerům - `Round.scores` je po hráčích (rozhodnutí #33).
+        const ids = getGame(prev.gameId).sharedBall
+          ? (teamOf(prev, playerId)?.playerIds ?? [playerId])
+          : [playerId]
+        const scores = { ...prev.scores }
+        for (const id of ids) {
+          const holes = [...(scores[id] ?? [])]
+          holes[hole] = value
+          scores[id] = holes
+        }
+        return touchRound({ ...prev, scores })
+      })
+    },
+    [updateRound],
+  )
 
-  const setPar = useCallback((hole: number, par: number) => {
-    // setHolePar zároveň zahodí Longest/Nearest, když na novém paru nepatří.
-    setRound((prev) => (prev ? touchRound(setHolePar(prev, hole, par)) : prev))
-  }, [])
+  /**
+   * Kolo, jehož nastavení se upravuje na krocích zakládání.
+   *
+   * Odvozuje se, ne drží ve vlastním stavu: po zpět/swipe se obnovuje jen
+   * `NavSnapshot`, takže odvozená hodnota se nemůže rozejít s tím, co je vidět.
+   */
+  const setupRound =
+    setupRoundId && round?.id === setupRoundId && !round.finishedAt ? round : undefined
 
-  const setHoleSetup = useCallback((hole: number, selection: HoleSetupSelection) => {
-    setRound((prev) => {
-      if (!prev) return prev
-      const update = getGame(prev.gameId).setHoleSetup
-      if (!update) return prev
-      const next = update(prev, hole, selection)
-      return next === prev ? prev : touchRound(next)
-    })
-  }, [])
+  /** Otevře nastavení rozehraného kola - třeba když se hráči přeskupili. */
+  const openRoundSetup = useCallback(() => {
+    if (!round || round.finishedAt) return
+    setSetupRoundId(round.id)
+    setView('setupGame')
+  }, [round])
 
-  const goToHole = useCallback((hole: number) => {
-    setRound((prev) => {
-      if (!prev) return prev
-      return { ...prev, currentHole: Math.max(0, Math.min(prev.holeCount - 1, hole)) }
-    })
-  }, [])
+  /** Zavře nastavení kola a vrátí se k zápisu skóre. */
+  const leaveRoundSetup = useCallback(() => {
+    setSetupRoundId(null)
+    setView(viewForRound(round))
+  }, [round])
+
+  /**
+   * Volba hry: u nového kola do rozepsaného stavu, u rozehraného kola rovnou
+   * na kolo. Kolo se pak přepočítá celé - všechny hry počítají výsledek ze
+   * zapsaného skóre, které se nikdy nemaže.
+   */
+  const changeGame = useCallback(
+    (nextGameId: string) => {
+      if (!setupRound) {
+        setGameId(nextGameId)
+        return
+      }
+      updateRound((prev) =>
+        applyRoundGame(
+          prev,
+          nextGameId,
+          pairingIndexOf(prev),
+          loadGameOptions(nextGameId),
+        ),
+      )
+    },
+    [setupRound, updateRound],
+  )
+
+  /** Volba dvojic; v rozehraném kole se uplatní hned. */
+  const changePairing = useCallback(
+    (value: number) => {
+      if (!setupRound) {
+        setPairing(value)
+        return
+      }
+      updateRound((prev) =>
+        applyRoundGame(prev, prev.gameId, value, loadGameOptions(prev.gameId)),
+      )
+    },
+    [setupRound, updateRound],
+  )
+
+  const setBonus = useCallback(
+    (playerId: PlayerId, hole: number, bonusId: BonusId) => {
+      updateRound((prev) => touchRound(toggleBonus(prev, playerId, hole, bonusId)))
+    },
+    [updateRound],
+  )
+
+  const setPar = useCallback(
+    (hole: number, par: number) => {
+      // setHolePar zároveň zahodí Longest/Nearest, když na novém paru nepatří.
+      updateRound((prev) => touchRound(setHolePar(prev, hole, par)))
+    },
+    [updateRound],
+  )
+
+  const setHoleSetup = useCallback(
+    (hole: number, selection: HoleSetupSelection) => {
+      updateRound((prev) => {
+        const update = getGame(prev.gameId).setHoleSetup
+        if (!update) return prev
+        const next = update(prev, hole, selection)
+        return next === prev ? prev : touchRound(next)
+      })
+    },
+    [updateRound],
+  )
+
+  const goToHole = useCallback(
+    (hole: number) => {
+      updateRound((prev) => ({
+        ...prev,
+        currentHole: Math.max(0, Math.min(prev.holeCount - 1, hole)),
+      }))
+    },
+    [updateRound],
+  )
 
   const finishRound = useCallback(() => {
     setRound((prev) => {
@@ -379,6 +591,12 @@ function AppShell() {
     setArchive(loadArchive())
     setOpenArchiveId(roundId)
     setView('archive')
+  }, [])
+
+  /** Otevře archivní kolo v zápisu skóre - dodatečná oprava odehraného kola. */
+  const editArchivedRound = useCallback((roundId: string) => {
+    setOpenArchiveId(roundId)
+    setView('archiveEdit')
   }, [])
 
   /**
@@ -516,11 +734,36 @@ function AppShell() {
     )
   }
 
-  if (view === 'archive') {
+  // Oprava odehraného kola: stejný zápis skóre jako na hřišti, jen se ukládá
+  // rovnou do archivu a končí zpátky v jeho detailu.
+  if (editedRound) {
+    return (
+      <PlayScreen
+        round={editedRound}
+        editing
+        onSetScore={setScore}
+        onToggleBonus={setBonus}
+        onSetPar={setPar}
+        onSetHoleSetup={setHoleSetup}
+        onGoToHole={goToHole}
+        onFinish={() => window.history.back()}
+        onShowResults={() => window.history.back()}
+      />
+    )
+  }
+
+  // Bez nalezeného kola (smazané, obnovené ze zálohy) spadne editace zpátky
+  // do archivu, ať appka nikdy neskončí na prázdné obrazovce.
+  if (view === 'archive' || view === 'archiveEdit') {
     const opened = archive.find((r) => r.id === openArchiveId)
     if (opened) {
       return (
-        <ResultsScreen round={opened} readOnly onBack={() => window.history.back()} />
+        <ResultsScreen
+          round={opened}
+          readOnly
+          onEdit={() => editArchivedRound(opened.id)}
+          onBack={() => window.history.back()}
+        />
       )
     }
     return (
@@ -591,21 +834,52 @@ function AppShell() {
     )
   }
 
+  // Hra a dvojice - u nového kola z rozepsaného stavu, u rozehraného kola
+  // rovnou z kola, takže se volba nemá s čím rozejít.
+  const setupPlayerCount = setupRound?.players.length ?? playerCount
+  const setupNames = setupRound
+    ? setupRound.players.map((player) => player.name)
+    : names.slice(0, playerCount)
+  const setupGameId = setupRound?.gameId ?? gameId
+  const setupPairing = setupRound ? pairingIndexOf(setupRound) : pairing
+  const setupNeedsPairing =
+    setupPlayerCount === 4 && getGame(setupGameId).usesTeams(setupPlayerCount)
+
   if (view === 'setupGame') {
     return (
       <SetupGameScreen
-        playerCount={playerCount}
-        names={names}
-        gameId={gameId}
-        onGameIdChange={setGameId}
-        pairing={pairing}
-        onPairingChange={setPairing}
+        playerCount={setupPlayerCount}
+        gameId={setupGameId}
+        onGameIdChange={changeGame}
+        {...(setupNeedsPairing
+          ? { pairingLabel: pairingLabel(setupGameId, setupNames, setupPairing) }
+          : {})}
+        onOpenPairing={() => setView('setupPairing')}
         onOpenGameSettings={(id) => {
           setSettingsGameId(id)
           openSetupSubscreen('gameSettings')
         }}
+        {...(setupRound ? { editing: true } : {})}
         onBack={() => window.history.back()}
-        onNext={() => setView('setupBet')}
+        onNext={() =>
+          setupRound
+            ? leaveRoundSetup()
+            : setView(setupNeedsPairing ? 'setupPairing' : 'setupBet')
+        }
+      />
+    )
+  }
+
+  if (view === 'setupPairing') {
+    return (
+      <SetupPairingScreen
+        names={setupNames}
+        gameId={setupGameId}
+        pairing={setupPairing}
+        onPairingChange={changePairing}
+        {...(setupRound ? { editing: true } : {})}
+        onBack={() => window.history.back()}
+        onNext={() => (setupRound ? leaveRoundSetup() : setView('setupBet'))}
       />
     )
   }
@@ -658,6 +932,7 @@ function AppShell() {
   return (
     <PlayScreen
       round={round}
+      onOpenSetup={openRoundSetup}
       onSetScore={setScore}
       onToggleBonus={setBonus}
       onSetPar={setPar}

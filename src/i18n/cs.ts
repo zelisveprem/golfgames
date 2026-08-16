@@ -78,7 +78,6 @@ export const cs = {
   'players.noTeePreference': 'Bez výchozího odpaliště',
 
   // --- úvodní obrazovka ---------------------------------------------------
-  'setup.title': 'Golf Games',
   'setup.subtitle': 'Nové kolo',
   'setup.next': 'Další',
   'setup.stepTeeTitle': 'Odpaliště a jamky',
@@ -96,6 +95,14 @@ export const cs = {
   'setup.addPlayer': 'Přidat {name} do kola',
   'setup.allPlayersUsed': 'Všichni uložení hráči už jsou v kole.',
   'setup.pairs': 'Dvojice',
+  'setup.pairsChoose': 'Vybrat dvojice',
+  'setup.pairsHint': 'Dvojice jde změnit i během kola; výsledek se přepočítá celý.',
+  'setup.opponentsHint':
+    'Kdo s kým hraje jde změnit i během kola; oba zápasy se přepočítají celé.',
+  'setup.pairsEditHint':
+    'Změna se uplatní hned a kolo se přepočítá od první jamky. Zapsané skóre se nemaže.',
+  'setup.editRoundSubtitle': 'Nastavení kola',
+  'setup.backToRound': 'Zpět ke hře',
   'setup.versus': 'vs',
   'setup.stake': 'Sázka',
   'setup.pointValue': 'Hodnota bodu',
@@ -141,6 +148,7 @@ export const cs = {
   'setup.netScoring': 'Hrát na rány s handicapem (netto)',
   'setup.handicapIndex': 'Index',
   'setup.handicapStrokes': 'Rány',
+  'setup.handicapShort': 'HCP',
   'setup.handicapFor': 'Handicap hráče {name}',
   'setup.noHandicap': 'bez HCP',
   'setup.strokesGiven': {
@@ -157,7 +165,7 @@ export const cs = {
   'setup.backup': 'Záloha dat',
   'setup.signIn': 'Přihlásit se a zálohovat',
   'setup.account': 'Účet a synchronizace',
-  'pwa.installApp': 'Přidat Golf Games na plochu',
+  'pwa.installApp': 'Přidat Fairsome na plochu',
   'pwa.installAppBenefit':
     'Spustíš aplikaci jedním klepnutím bez adresního řádku. Zápis skóre zůstane dostupný i bez signálu.',
   'pwa.installIosTitle': 'Přidání na plochu',
@@ -173,7 +181,9 @@ export const cs = {
   'setup.offlineShort': 'bez připojení',
 
   // --- zápis skóre --------------------------------------------------------
+  'play.backToSetup': 'Zpět na nastavení kola',
   'play.previousHole': 'Předchozí jamka',
+  'play.nextHole': 'Další jamka',
   'play.hole': 'Jamka {number}',
   'play.par': 'Par',
   'play.noScore': 'zatím bez zápisu',
@@ -184,17 +194,23 @@ export const cs = {
   'play.plus': '{name}: přidat ránu, z prázdné buňky bogey',
   'play.hint':
     'Klepnutím doprostřed zapíšeš par ({par}), tlačítkem − birdie a tlačítkem + bogey. Přidržením čísla zápis smažeš.',
+  'play.strokesReceivedPair': {
+    one: 'Dvojice dostává na téhle jamce 1 ránu',
+    few: 'Dvojice dostává na téhle jamce {count} rány',
+    other: 'Dvojice dostává na téhle jamce {count} ran',
+  },
   'play.strokesReceived': {
     one: 'Na téhle jamce dostává {count} ránu',
     few: 'Na téhle jamce dostává {count} rány',
     other: 'Na téhle jamce dostává {count} ran',
   },
-  'play.standings': 'Průběžné výsledky',
-  'play.finish': 'Ukončit kolo',
-  'play.account': 'Účet a záloha',
+  'play.standings': 'Výsledky',
+  'play.finish': 'Ukončit',
+  'play.account': 'Účet',
   'play.next': 'Další jamka',
   'play.skip': 'Přeskočit na další',
   'play.finishAndSave': 'Ukončit a uložit kolo',
+  'play.saveEdits': 'Hotovo, zpět do archivu',
   'play.incompleteTitle': 'Kolo není kompletní.',
   'play.incompleteConceded':
     'Chybí zápis na jamkách {holes} – budou se počítat jako vzdané.',
@@ -246,6 +262,9 @@ export const cs = {
   'gameSettings.multipliers': 'Násobiče za výsledek',
   'gameSettings.multipliersHint':
     'Kolikrát se hodnota extra bodu počítá, když hráč jamku zahraje pod par. Par platí vždy jednou.',
+  'gameSettings.multipliersWithHandicap': 'Uplatňovat HCP',
+  'gameSettings.multipliersWithHandicapNote':
+    'Bez zaškrtnutí se násobič počítá ze skutečného výsledku - birdie znamená ránu pod par jamky. Se zaškrtnutím se v netto kole bere osobní par, takže hráči, který na jamce dostává ránu, stačí par.',
   'gameSettings.multiplierFor': 'Násobič za {name}',
   'gameSettings.otherOptions': 'Další volby',
   'gameSettings.doubleClosing': '9. a 18. jamka za dvojnásobek',
@@ -360,7 +379,7 @@ export const cs = {
   'backup.summary': 'V archivu je {count} kol',
   'backup.summaryAdded': 'z toho {count} nových',
   'backup.summaryCurrent': 'obnovilo se i rozehrané kolo',
-  'backup.errorInvalid': 'Tenhle soubor není záloha Golf Games, nebo je poškozený.',
+  'backup.errorInvalid': 'Tenhle soubor není záloha Fairsome, nebo je poškozený.',
   'backup.errorTooNew':
     'Záloha pochází z novější verze aplikace. Aktualizuj aplikaci a zkus to znovu.',
 
@@ -493,6 +512,14 @@ export const cs = {
   'games.match-play.tagline': 'Zápas na jamky, ne na rány',
   'games.match-play.rules':
     'Zápas dvou stran - buď dva hráči proti sobě, nebo dvě dvojice, za které hraje vždy lepší míč. Kdo zahraje jamku líp, jde o jednu nahoru; shodná jamka je dělená. Zápas končí, jakmile je náskok větší než počet zbývajících jamek.',
+  'games.foursome.name': 'Foursome',
+  'games.foursome.tagline': 'Dvojice hraje jedním míčem, zápas na jamky',
+  'games.foursome.rules':
+    'Jamkovka dvou dvojic, které hrají jedním míčem: dvojice odpálí jednou a v ranách se dál střídá, takže na jamku má jediné skóre. Kdo zahraje jamku líp, jde o jednu nahoru; shodná jamka je dělená. Skóre se zapisuje jedno za dvojici. Se zapnutým netto dostane dvojice rány z poloviny součtu hracích handicapů obou partnerů.',
+  'games.singles-matches.name': 'Dvě jamkovky 1 na 1',
+  'games.singles-matches.tagline': 'Čtyři hráči v jednom flightu, dva samostatné zápasy',
+  'games.singles-matches.rules':
+    'Čtyři hráči jdou spolu v jednom flightu, ale hrají se dva samostatné zápasy jednotlivců - kdo s kým, vybereš v Soupeřích. Každý zápas se počítá sám za sebe včetně peněz: výsledek jednoho na druhý nemá vliv. Kdo zahraje jamku líp, jde o jednu nahoru; shodná jamka je dělená.',
   'games.stableford.name': 'Stableford',
   'games.stableford.tagline': 'Body za jamku, zkažená jamka kolo nezničí',
   'games.stableford.rules':
@@ -503,6 +530,22 @@ export const cs = {
     'Hra pro tři hráče. Na každé jamce je v sázce pevný počet bodů a rozdělí se podle pořadí. Nine Dot (Devítka) rozdává 9 bodů: 5-3-1, při shodě dvou nejlepších 4-4-1, při shodě dvou nejhorších 5-2-2 a při remíze všech 3-3-3. Six Dot (Šestka) rozdává 6 bodů: 4-2-0, 3-3-0, 4-1-1 a 2-2-2. Variantu i obě nadstavby zapneš v nastavení bodování hry.',
 
   // Best + Součet
+  // --- rozpis bodů jamky ---------------------------------------------------
+  'breakdown.title': 'Rozpis bodů',
+  'breakdown.subtitle': '{name} · jamka {hole}',
+  'breakdown.open': 'Rozpis bodů: {name}',
+  'breakdown.versus': '{own} proti {other}',
+  'breakdown.net': 'netto {value}',
+  'breakdown.gross': 'brutto {value}',
+  'breakdown.total': 'Body za jamku',
+  'breakdown.empty': 'Na téhle jamce ještě není co rozepisovat.',
+  'breakdown.doubled': 'Jamka se počítá za dvojnásobek.',
+  'breakdown.pending': 'zapsal {name} – zatím nepotvrzeno',
+  'breakdown.forfeited': 'propadlo, zapsal {name}',
+  'breakdown.handicapOn': 'Birdie a eagle se posuzují netto (volba Uplatňovat HCP).',
+  'breakdown.handicapOff': 'Birdie a eagle se posuzují z brutto ran.',
+  'best.doubleBest': 'Double Best',
+  'best.doubleBestNote': 'oba míče lepší než soupeřovy',
   'best.points': 'Body',
   'best.headerNote': 'Průběžné skóre',
   'best.pointsDescription':
@@ -583,6 +626,8 @@ export const cs = {
   'dot.columnAria': '{name}: body za jamku',
 
   // Zadání hřiště
+  'scorecard.turnShort': 'OUT',
+  'scorecard.turn': 'Mezisoučet po první devítce',
   'scorecard.strokeIndex': 'Stroke index jamky',
   'scorecard.strokeIndexShort': 'SI',
   'scorecard.title': 'Scorekarta',
@@ -628,7 +673,7 @@ export const cs = {
   'picker.addFavorite': 'Přidat hřiště {name} mezi oblíbená',
   'picker.removeFavorite': 'Odebrat hřiště {name} z oblíbených',
   'picker.noCourseMeta': 'Pary se nastavují při hře, handicapy se nepočítají.',
-  'picker.credit': 'Hřiště z otevřeného katalogu Golf Games, licence ODbL.',
+  'picker.credit': 'Hřiště z otevřeného katalogu Fairsome, licence ODbL.',
   'picker.creditLink': 'Zdroj a opravy',
   'picker.holes': { one: '{count} jamka', few: '{count} jamky', other: '{count} jamek' },
   'picker.loops': {
@@ -720,6 +765,7 @@ export const cs = {
     few: 'dormie · zbývají {count} jamky',
     other: 'dormie · zbývá {count} jamek',
   },
+  'match.dormieOnly': 'dormie',
   'match.resultShort': '{lead}&{remaining}',
   'match.finalShort': 'konec · {lead} UP',
   'match.finishedShort': 'konec',
@@ -730,7 +776,23 @@ export const cs = {
   'match.hole': 'Jamka',
   'match.outOfPlay': 'Mimo hru – zápas už je rozhodnutý',
 
+  // Foursome a dvě jamkovky ve flightu
+  'foursome.net': 'Netto dvojice',
+  'foursome.pairHandicap': 'HCP dvojice {handicap}',
+  'singles.title': 'Zápasy ve flightu',
+  'singles.versusJoin': ' vs. ',
+  'singles.versusDetail': 'vs. {name} · vyhrané {won} · dělené {halved}',
+  'singles.opponents': 'Soupeři',
+
+  // --- extra body jako vedlejší sázka --------------------------------------
+  'sideBets.title': 'Extra body',
+  'sideBets.description':
+    'Vedlejší sázka mimo pravidla hry; body se přidávají do vyrovnání kola.',
+  'sideBets.settingsHint':
+    'Extra body jsou vedlejší sázka: ve výchozím stavu jsou nulové, hraje se o ně teprve po zadání hodnoty.',
+
   // --- peněžní vyrovnání --------------------------------------------------
+  'money.perGroup': 'Každý zápas se vyrovnává zvlášť.',
   'money.nobodyOwes': 'Nikdo nikomu nic nedluží.',
   'money.eachOpponent': 'Každý bod navíc platí každý ze soupeřů zvlášť.',
   'money.optimizedSettlement':

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Round } from '../types'
 import { BONUSES, formatHoleList, formatRoundDate, roundCompleteness } from '../types'
 import { getGame } from '../games'
-import { formatMoney, settleRound } from '../money'
+import { formatMoney, settleGroups, settleRound, transfersEqual } from '../money'
 import Scorecard from './Scorecard'
 import { dynamicKey, useT } from '../i18n'
 import type { MessageKey } from '../i18n'
@@ -13,6 +13,8 @@ interface Props {
   onOpenAccount?: () => void
   /** Archivní kolo se jen prohlíží - nejde v něm pokračovat ani ho mazat. */
   readOnly?: boolean
+  /** Dodatečná oprava skóre archivního kola. */
+  onEdit?: () => void
   onResume?: () => void
   onNewRound?: () => void
   onOpenArchive?: () => void
@@ -26,6 +28,7 @@ export default function ResultsScreen({
   round,
   onOpenAccount,
   readOnly = false,
+  onEdit,
   onResume,
   onNewRound,
   onOpenArchive,
@@ -43,13 +46,34 @@ export default function ResultsScreen({
 
   // Peníze se počítají z hlavní tabulky hry - body, skiny i vyhrané jamky
   // fungují stejně. Bez sázky nebo bez soupeře vyjde 'none' a sekce se skryje.
+  // Hry s vedlejší sázkou (extra body u jamkovky, Stablefordu a Dots) dodají
+  // strany samy: do tabulky se extra body přičíst nedají, protože ta drží
+  // pořadí podle pravidel hry.
   const mainRows = sections[0]?.rows ?? []
+  const parties =
+    game.settlementParties?.(round) ??
+    mainRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      units: row.value,
+    }))
+  // Dvě jamkovky ve flightu jsou dvě hry v jednom kole: každá se vyrovnává
+  // sama za sebe, jinak by si platili hráči z různých zápasů.
+  const groups = game.settlementGroups?.(round)
   // U jednotlivců se přepínač týká jen způsobu zobrazení stejných zůstatků;
   // výchozí přímé platby zachovávají původní pravidlo každý proti každému.
-  const settlement = settleRound(
-    round,
-    mainRows.map((row) => ({ id: row.id, name: row.name, units: row.value })),
-  )
+  const settlement = groups
+    ? settleGroups(
+        round,
+        groups.map((ids) => ids.flatMap((id) => parties.filter((p) => p.id === id))),
+      )
+    : settleRound(round, parties)
+  // Optimalizace, která vyjde stejně jako přímé platby, není volba - je to
+  // druhý identický seznam a přepínač nad ním jen zdržuje.
+  const canOptimize =
+    settlement.kind === 'balances' &&
+    settlement.transfers.length > 0 &&
+    !transfersEqual(settlement.transfers, settlement.optimizedTransfers)
 
   /**
    * Konfigurace, se kterou se kolo hrálo. U archivního kola je díky tomu
@@ -191,37 +215,39 @@ export default function ResultsScreen({
                 </ul>
                 {settlement.transfers.length > 0 && (
                   <>
-                    <div className="segmented settlement-toggle">
-                      <button
-                        type="button"
-                        className={`segment${
-                          paymentMode === 'individual' ? ' selected' : ''
-                        }`}
-                        onClick={() => setPaymentMode('individual')}
-                        aria-pressed={paymentMode === 'individual'}
-                      >
-                        {t('results.detailedPayments')}
-                      </button>
-                      <button
-                        type="button"
-                        className={`segment${
-                          paymentMode === 'optimized' ? ' selected' : ''
-                        }`}
-                        onClick={() => setPaymentMode('optimized')}
-                        aria-pressed={paymentMode === 'optimized'}
-                      >
-                        {t('results.optimizedPayments')}
-                      </button>
-                    </div>
+                    {canOptimize && (
+                      <div className="segmented settlement-toggle">
+                        <button
+                          type="button"
+                          className={`segment${
+                            paymentMode === 'individual' ? ' selected' : ''
+                          }`}
+                          onClick={() => setPaymentMode('individual')}
+                          aria-pressed={paymentMode === 'individual'}
+                        >
+                          {t('results.detailedPayments')}
+                        </button>
+                        <button
+                          type="button"
+                          className={`segment${
+                            paymentMode === 'optimized' ? ' selected' : ''
+                          }`}
+                          onClick={() => setPaymentMode('optimized')}
+                          aria-pressed={paymentMode === 'optimized'}
+                        >
+                          {t('results.optimizedPayments')}
+                        </button>
+                      </div>
+                    )}
                     <h3 className="settlement-subtitle">
-                      {paymentMode === 'individual'
-                        ? t('results.detailedPayments')
-                        : t('results.optimizedPayments')}
+                      {canOptimize && paymentMode === 'optimized'
+                        ? t('results.optimizedPayments')
+                        : t('results.detailedPayments')}
                     </h3>
                     <ul className="settlement">
-                      {(paymentMode === 'individual'
-                        ? settlement.transfers
-                        : settlement.optimizedTransfers
+                      {(canOptimize && paymentMode === 'optimized'
+                        ? settlement.optimizedTransfers
+                        : settlement.transfers
                       ).map((transfer) => (
                         <li
                           key={`${transfer.fromId}-${transfer.toId}`}
@@ -244,7 +270,7 @@ export default function ResultsScreen({
             )}
 
             <p className="hint">
-              {settlement.kind === 'balances' && paymentMode === 'optimized'
+              {canOptimize && paymentMode === 'optimized'
                 ? t('money.optimizedSettlement')
                 : settlement.summary}
               {settlement.kind === 'balances' && (
@@ -294,9 +320,18 @@ export default function ResultsScreen({
 
       <footer className="app-footer">
         {readOnly ? (
-          <button type="button" className="primary-button" onClick={onBack}>
-            {t('results.backToArchive')}
-          </button>
+          <div className="footer-row">
+            {/* Zpětná oprava odehraného kola: skóre se dá spočítat i po hře,
+                takže archiv nesmí být jen ke čtení. */}
+            {onEdit && (
+              <button type="button" className="secondary-button" onClick={onEdit}>
+                {t('results.editScores')}
+              </button>
+            )}
+            <button type="button" className="primary-button" onClick={onBack}>
+              {t('results.backToArchive')}
+            </button>
+          </div>
         ) : finished ? (
           <div className="footer-row">
             <button type="button" className="secondary-button" onClick={onResume}>

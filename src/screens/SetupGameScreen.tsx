@@ -4,55 +4,35 @@ import { useT } from '../i18n'
 import type { MessageKey } from '../i18n'
 import { BackIcon } from './icons'
 
-/**
- * Tři možná rozdělení čtyř hráčů do dvojic. Víc jich neexistuje - u čtyř
- * hráčů určuje dvojice už jen to, koho dostane první hráč za partnera.
- *
- * Vybírá se tady, ale uplatňuje se až při zakládání kola v `SetupBetScreen`,
- * a to podle indexu do tohohle pole - dvě kopie by se rozešly a hráči by
- * dostali jiné dvojice, než jaké si vybrali.
- */
-export const PAIRINGS: number[][][] = [
-  [
-    [0, 1],
-    [2, 3],
-  ],
-  [
-    [0, 2],
-    [1, 3],
-  ],
-  [
-    [0, 3],
-    [1, 2],
-  ],
-]
-
 interface Props {
   playerCount: number
-  names: string[]
   gameId: string
   onGameIdChange: (value: string) => void
-  pairing: number
-  onPairingChange: (value: number) => void
+  /** Popis zvolených dvojic; chybí u her, které se ve dvojicích nehrají. */
+  pairingLabel?: string
+  onOpenPairing: () => void
   onOpenGameSettings: (gameId: string) => void
+  /** Úprava rozehraného kola: volba se uplatní hned a kolo se přepočítá. */
+  editing?: boolean
   onBack: () => void
   onNext: () => void
 }
 
 /**
- * Krok 4 zakládání kola: hra a případně dvojice.
+ * Krok 4 zakládání kola: hra. Dvojice mají od té doby, co se dají měnit
+ * i v rozehraném kole, vlastní krok (`SetupPairingScreen`).
  *
  * Počet hráčů se vybírá dřív (krok Hráči), takže se tu nabízejí jen hry, co
  * ho podporují - ne naopak jako dřív, kdy hra omezovala počet hráčů.
  */
 export default function SetupGameScreen({
   playerCount,
-  names,
   gameId,
   onGameIdChange,
-  pairing,
-  onPairingChange,
+  pairingLabel,
+  onOpenPairing,
   onOpenGameSettings,
+  editing = false,
   onBack,
   onNext,
 }: Props) {
@@ -62,6 +42,9 @@ export default function SetupGameScreen({
   const gameValid = availableGames.some((g) => g.id === gameId)
   const usesTeams = game.usesTeams(playerCount)
   const needsPairing = gameValid && usesTeams && playerCount === 4
+  // U dvou jamkovek ve flightu nejsou dvojice partneři, ale soupeři jednoho
+  // zápasu - jinak by odkaz tvrdil, že hrají spolu.
+  const opponents = game.pairingKind === 'opponents'
 
   // Změna počtu hráčů v předchozím kroku mohla vyřadit dřív zvolenou hru -
   // ať appka pořád má vybranou hru, kterou jde s tímhle počtem hrát.
@@ -70,8 +53,24 @@ export default function SetupGameScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameValid, availableGames[0]?.id])
 
-  const displayName = (index: number) =>
-    names[index]?.trim() || t('common.player', { number: index + 1 })
+  /**
+   * Odkaz na krok s dvojicemi. Při zakládání kola stojí pod hrou (vybírá se
+   * odshora dolů), při úpravě rozehraného kola nad ní - tam se chodí právě
+   * kvůli dvojicím a seznam her by je odsunul pod okraj displeje.
+   */
+  const pairingSection = needsPairing ? (
+    <section className="section">
+      <h2 className="section-title">
+        {opponents ? t('singles.opponents') : t('setup.pairs')}
+      </h2>
+      {/* Vlastní krok, ne sekce pod hrou: na malém displeji byla volba dvojic
+          pod seznamem her mimo displej a po zahájení kola se k ní nedalo
+          vrátit. */}
+      <button type="button" className="secondary-button" onClick={onOpenPairing}>
+        {pairingLabel ?? t('setup.pairsChoose')}
+      </button>
+    </section>
+  ) : null
 
   return (
     <div className="screen">
@@ -87,10 +86,14 @@ export default function SetupGameScreen({
           </button>
           <h1>{t('setup.stepGameTitle')}</h1>
         </div>
-        <p className="subtitle">{t('setup.subtitle')}</p>
+        <p className="subtitle">
+          {editing ? t('setup.editRoundSubtitle') : t('setup.subtitle')}
+        </p>
       </header>
 
       <main className="content">
+        {editing && pairingSection}
+
         <section className="section">
           <h2 className="section-title">{t('setup.game')}</h2>
           <div className="game-list">
@@ -130,33 +133,12 @@ export default function SetupGameScreen({
           )}
         </section>
 
-        {needsPairing && (
-          <section className="section">
-            <h2 className="section-title">{t('setup.pairs')}</h2>
-            <div className="game-list">
-              {PAIRINGS.map((option, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  className={`game-card${index === pairing ? ' selected' : ''}`}
-                  onClick={() => onPairingChange(index)}
-                  aria-pressed={index === pairing}
-                >
-                  <span className="pairing-line">
-                    {(option[0] ?? []).map(displayName).join(' + ')}
-                    <span className="pairing-vs">{t('setup.versus')}</span>
-                    {(option[1] ?? []).map(displayName).join(' + ')}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+        {!editing && pairingSection}
       </main>
 
       <footer className="app-footer">
         <button type="button" className="primary-button" onClick={onNext}>
-          {t('setup.next')}
+          {editing ? t('setup.backToRound') : t('setup.next')}
         </button>
       </footer>
     </div>

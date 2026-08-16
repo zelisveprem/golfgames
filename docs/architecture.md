@@ -41,6 +41,7 @@ Klíčové vlastnosti prostředí, které tvarují všechna rozhodnutí:
                  ┌───────────────▼────────────────────┐
    model         │ types.ts   (Round + výpočty)       │
                  │ money.ts   (přepočet na peníze)    │
+                 │ roundSetup.ts (dvojice, změna hry) │
                  │ handicap.ts (netto, rozdělení ran) │
                  │ courses/   (model hřiště)          │
                  │ i18n/      (překlady, formátování) │
@@ -215,6 +216,10 @@ Hra je jeden objekt implementující `GameDefinition`
 | `scorecardPlayerCell(...)`   | ne      | dekorace výsledku hráče (např. skin a bonus) |
 | `scorecardPlayerTotal(...)`  | ne      | souhrn hry za celkovými ránami hráče         |
 | `scorecardColumns(round)`    | ne      | vlastní sloupce ve scorekartě                |
+| `sharedBall`                 | ne      | hraje dvojice jedním míčem (Foursome)?       |
+| `pairingKind`                | ne      | jsou dvojice partneři, nebo soupeři zápasu?  |
+| `teamLabel(round, team)`     | ne      | jiné pojmenování dvojice než „A + B"         |
+| `settlementGroups(round)`    | ne      | nezávislá peněžní vyrovnání v jednom kole    |
 
 Registr je [`src/games/index.ts`](../src/games/index.ts). `getGame()` při
 neznámém `id` vrací výchozí hru, aby archiv s odstraněnou hrou nespadl.
@@ -223,6 +228,29 @@ neznámém `id` vrací výchozí hru, aby archiv s odstraněnou hrou nespadl.
 podkladem pro peněžní vyrovnání – `ResultsScreen` z ní bere `row.value` jako
 „jednotky" (body, skiny, vyhrané jamky) a předá je `settleRound()`. Nová hra
 proto musí mít v první sekci hodnotu, která dává smysl přepočítat na peníze.
+Hra, ve které běží víc nezávislých her zároveň (dvě jamkovky ve flightu),
+k tomu přidá `settlementGroups()` a vyrovnání pak spočítá `settleGroups()` –
+každá skupina sama za sebe, viz [rozhodnutí #34](decisions.md).
+
+**Jeden míč na dvojici:** `sharedBall` mění zápis skóre na jeden řádek za
+dvojici a scorekartu na jeden sloupec za dvojici. `Round.scores` zůstává po
+hráčích a hodnota se ukládá **oběma** partnerům – `App.setScore()` to zajistí,
+takže hry ani obrazovky nemusí řešit, kdo z dvojice je „nositel" míče
+(rozhodnutí #33). Handicap dvojice počítá `pairPlayingHandicap()`
+v `src/handicap.ts`.
+
+**Jamkovka na společném jádru:** stav zápasu, dormie, notaci `3&2` i jamky
+mimo hru řeší `src/games/match.ts`. Varianta dodá jen strany zápasu a funkci,
+která z kola spočítá ránu strany – lepší míč u four-ballu, jediný míč
+u Foursome, vlastní skóre u jednotlivců. Match play, Foursome a dvě jamkovky
+tak sdílí jedno pravidlo místo tří kopií.
+
+**Extra body mimo bodování hry:** hry, které samy body nerozdávají (jamkovka,
+Foursome, dvě jamkovky, Stableford, Dots), berou extra body jako **vedlejší
+sázku** – `src/games/sideBets.ts` z nich postaví vlastní tabulku a přidá je
+k jednotkám hry v `settlementParties()`, protože do hlavní tabulky se přičíst
+nedají (rozhodnutí #37). Výchozí hodnoty jsou u těchhle her nulové; nastaví je
+`loadGameOptions()` podle `scoringOptions.bonusesAsSideBet`.
 
 **Řazení** obstarává `rankRows(rows, 'highest' | 'lowest')`: doplní pozice,
 při shodě je sdílí (1, 1, 3) a strany bez jediné započítané jamky odsune na
@@ -233,6 +261,8 @@ konec, aby nikdo nevedl jen proto, že ještě nic nezapsal.
 1. Nový soubor `src/games/<hra>.ts` s objektem typu `GameDefinition`.
 2. Zápis do pole `GAMES` v `src/games/index.ts`.
 3. Testy `src/games/<hra>.test.ts` (fixtura `makeRound` je v `fixtures.ts`).
+   Deklaruj i extra body: buď je hra počítá do svých bodů, nebo je vezme jako
+   vedlejší sázku (`bonusesAsSideBet` + `settlementParties()`, viz `sideBets.ts`).
 4. Kapitola v [`games.md`](games.md) včetně rozhodnutí tam, kde pravidla mlčí.
 5. Záznam v [`../CHANGELOG.md`](../CHANGELOG.md) a `npm run bump:minor`.
 
@@ -381,7 +411,7 @@ Volba jazyka: uložená předvolba → jazyk prohlížeče → angličtina.
 ## Stav a navigace
 
 `App.tsx` drží čtyři věci: rozehrané kolo, archiv, jméno viditelné obrazovky
-(`'setup' | 'play' | 'results' | 'archive' | 'gameSettings'`) a rozepsaný draft
+(`'home' | 'play' | 'results' | 'archive' | 'archiveEdit' | ...`) a rozepsaný draft
 nastavení nového kola. Draft zůstává v kořeni aplikace, aby přechod do výběru
 hřiště nebo jiné podobrazovky nesmazal zadané hráče, hru ani handicapy.
 Navigace je plochá – aplikace se ovládá jednou rukou na hřišti, takže se nikam
@@ -397,23 +427,25 @@ uvnitř appky.
 Kolo se ukládá `useEffect`em při každé změně, takže ho není potřeba ukládat
 ručně z obrazovek. Všechny změny skóre jdou přes callbacky v `App.tsx`, které
 `Round` mění **neměnně** (nové pole/objekt, ne mutace) – jinak by se React
-nepřekreslil.
+nepřekreslil. Cíl změny určuje `updateRound()`: bez otevřené opravy je to
+rozehrané kolo, s otevřenou oprava záznamu v archivu.
 
 Tok appky:
 
 ```
-HomeScreen ──▶ CoursePickerScreen ──▶ SetupTeeScreen ──▶ SetupPlayersScreen ──▶ SetupGameScreen ──▶ SetupBetScreen
-    │                  │                                                                                  │ start
-    ├──▶ MenuSheet     │                                                                                  ▼
-    │      ├──▶ CoursePickerScreen (mode="browse") ──▶ CourseEditScreen                          PlayScreen ──finish──▶ ResultsScreen ──▶ ArchiveScreen
-    │      ├──▶ PlayersScreen                                                                        │                       │
-    │      ├──▶ ArchiveScreen / BackupScreen / AccountScreen                                   (BonusSheet)            (Scorecard)
+HomeScreen ──▶ CoursePickerScreen ──▶ SetupTeeScreen ──▶ SetupPlayersScreen ──▶ SetupGameScreen ──▶ SetupPairingScreen ──▶ SetupBetScreen
+    │                  │                                                                                                            │ start
+    ├──▶ MenuSheet     │                                                                                                            ▼
+    │      ├──▶ CoursePickerScreen (mode="browse") ──▶ CourseEditScreen                                                    PlayScreen ──finish──▶ ResultsScreen ──▶ ArchiveScreen
+    │      ├──▶ PlayersScreen                                                                                                  │                       │
+    │      ├──▶ ArchiveScreen / BackupScreen / AccountScreen                                                             (BonusSheet)            (Scorecard)
     │
     └──▶ ArchiveScreen (poslední odehraná hra), CoursePickerScreen (oblíbené hřiště → rovnou SetupTeeScreen)
 
     (v krocích zakládání kola) SetupTeeScreen/SetupPlayersScreen ──▶ TeeSheet
                                 SetupTeeScreen ──▶ CoursePickerScreen / CourseEditScreen
-                                SetupGameScreen ──▶ GameSettingsScreen
+                                SetupGameScreen ──▶ GameSettingsScreen / SetupPairingScreen
+    (z rozehraného kola)        PlayScreen ──▶ SetupGameScreen ──▶ SetupPairingScreen (nastavení kola, rozhodnutí #35)
 ```
 
 **`HomeScreen` je skutečný vstupní bod appky** (rozhodnutí #28) – zobrazí se,
@@ -424,7 +456,9 @@ spravovat hráče, záloha, účet) je za `MenuSheet` – modálním listem, ne
 samostatnou obrazovkou v historii.
 
 **Zakládání kola je rozdělené na kroky** (rozhodnutí #29): hřiště →
-odpaliště a jamky → hráči → hra a dvojice → sázka, kde se kolo i založí.
+odpaliště a jamky → hráči → hra → dvojice → sázka, kde se kolo i založí.
+Krok s dvojicemi (`SetupPairingScreen`, rozhodnutí #35) se objeví jen tam, kde
+je co dělit – čtyři hráči a hra ve dvojicích.
 Nové kolo pak **začíná výběrem hřiště**, ne nastavením: bez hřiště není z čeho
 vybrat odpaliště ani počítat handicapy. `CoursePickerScreen` proto slouží ve
 dvou režimech (`mode` prop): `'start'` vede k `SetupTeeScreen` a v prvním
@@ -436,7 +470,21 @@ draftu jedné obrazovky – kroky se mezi sebou přepínají stejně jako která
 jiná obrazovka appky a nikdy se neodpojí. Odvození hřiště a výřezu, které
 potřebuje víc kroků najednou, počítá sdílené `src/screens/setupCourse.ts`.
 
+**Hru a dvojice jde změnit i v rozehraném kole** (rozhodnutí #35). Odkaz pod
+zápisem skóre otevře `SetupGameScreen` s `editing`; obrazovky pak nečtou
+rozepsané kolo, ale přímo `Round`, a volba se uplatní hned přes
+`applyRoundGame()` z `src/roundSetup.ts`. Kolo se tím přepočítá od první jamky
+a **zapsané skóre se nemaže** (nepřekročitelné pravidlo 11). Aby zpět/swipe
+nemohlo přistát na kroku, který už neplatí, nese si `NavSnapshot` i
+`setupRoundId` – `null` je rozepsané nové kolo, id je úprava nastavení toho
+kola; neplatný krok skončí tam, kam patří stav kola (`navTarget()` v `App.tsx`).
+
 `ResultsScreen` slouží zároveň jako detail archivního kola (`readOnly`).
+Z detailu se dá kolo **dodatečně opravit** (rozhodnutí #31): „Upravit skóre"
+otevře `PlayScreen` s `editing` a zápis míří přes `updateArchivedRound()`
+rovnou do archivu, ne do rozehraného kola. Které kolo se opravuje, se
+odvozuje z `view === 'archiveEdit'` a `openArchiveId`, aby to po zpět/swipe
+sedělo s tím, co je vidět.
 
 ## Obrazovky
 
@@ -449,8 +497,9 @@ potřebuje víc kroků najednou, počítá sdílené `src/screens/setupCourse.ts
 | `CourseEditScreen.tsx`   | ruční zadání a úprava hřiště: pary, stroke index, devítky, odpaliště                                     |
 | `SetupTeeScreen.tsx`     | krok 1 zakládání kola: odpaliště pro všechny a výřez hřiště (počet jamek, devítky)                       |
 | `SetupPlayersScreen.tsx` | krok 2: kolik hráčů, jména, odpaliště a handicap jednotlivců, oblíbení hráči                             |
-| `SetupGameScreen.tsx`    | krok 3: hra (jen ty, co podporují zvolený počet hráčů) a dvojice                                         |
-| `SetupBetScreen.tsx`     | krok 4, poslední: sázka nebo hra bez peněz, tady se kolo zakládá                                         |
+| `SetupGameScreen.tsx`    | krok 3: hra (jen ty, co podporují zvolený počet hráčů) a odkaz na dvojice                                |
+| `SetupPairingScreen.tsx` | krok 4: dvojice nebo soupeři; jediné místo, kde se dvojice mění i v rozehraném kole                      |
+| `SetupBetScreen.tsx`     | krok 5, poslední: sázka nebo hra bez peněz, tady se kolo zakládá                                         |
 | `TeeSheet.tsx`           | výběr odpaliště jednoho hráče: délka, norma a kolik ran z něj dostane                                    |
 | `PlayScreen.tsx`         | zápis skóre po jamkách, značky, extra body, ukončení kola; na mobilu v landscape živá scorekarta         |
 | `BonusSheet.tsx`         | výběr extra bodů pro hráče na jamce                                                                      |
@@ -461,6 +510,19 @@ potřebuje víc kroků najednou, počítá sdílené `src/screens/setupCourse.ts
 | `BackupScreen.tsx`       | stažení zálohy do souboru a obnova z něj                                                                 |
 | `AccountScreen.tsx`      | přihlášení, stav synchronizace, smazání účtu i dat                                                       |
 | `PrivacyScreen.tsx`      | zásady zpracování údajů                                                                                  |
+
+### Rozvržení obrazovky
+
+Každá obrazovka je `.screen` – flexový sloupec **vysoký přesně jako displej**
+(`height: 100dvh`, `overflow: hidden`). Roluje se jen `.content` uvnitř;
+`.app-header` a `.app-footer` zůstávají na svém místě a stránka samotná se
+neposouvá vůbec (`window.scrollY` je proto vždycky nula – kdo potřebuje posuv,
+pracuje s `.content`, viz `contentScroller()` v `App.tsx`).
+
+Patička se dřív držela dole přes `position: sticky` nad rolující stránkou.
+Na iOS v nainstalované PWA se při tažení prstem odlepila, doletěla doprostřed
+displeje a překryla obsah (rozhodnutí #32). Pevná výška obrazovky to řeší
+v základu, protože se pod patičkou nikdy nic neposouvá.
 
 ### Ovládání zápisu skóre
 
@@ -579,6 +641,7 @@ v [`../CONTRIBUTING.md`](../CONTRIBUTING.md#rozvržení-playwright).
 | -------------------------------- | --------------------------------------- |
 | bodování Best + Součet           | `src/games/bestAggregate.ts`            |
 | PWA instalace a režim            | `src/pwa.ts`                            |
+| gesto zpět od levého okraje      | `src/swipeBack.ts`                      |
 | chování vzdané jamky             | `src/games/shared.ts` + konkrétní hra   |
 | seznam extra bodů, jejich značky | `src/types.ts` (`BONUSES`)              |
 | výchozí hodnoty a násobiče       | `src/types.ts` (`DEFAULT_GAME_OPTIONS`) |
@@ -586,6 +649,9 @@ v [`../CONTRIBUTING.md`](../CONTRIBUTING.md#rozvržení-playwright).
 | rozdělení ran a netto výsledky   | `src/handicap.ts`                       |
 | přidělení Longestu a Nearestu    | `src/handicap.ts`                       |
 | lepší míč a součet dvojice       | `src/games/shared.ts`                   |
+| extra body jako vedlejší sázka   | `src/games/sideBets.ts`                 |
+| rozdělení hráčů do dvojic        | `src/roundSetup.ts`                     |
+| změna hry v rozehraném kole      | `src/roundSetup.ts`                     |
 | model hřiště a jeho kontrola     | `src/courses/types.ts`                  |
 | výřez hřiště a norma pro něj     | `src/courses/layout.ts`                 |
 | osmnáctka ze dvou devítek        | `src/courses/composite.ts`              |

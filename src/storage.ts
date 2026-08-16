@@ -1,10 +1,12 @@
-import type { GameOptions, Round, RoundSettings } from './types'
+import type { BonusId, GameOptions, Round, RoundSettings } from './types'
 import {
+  BONUSES,
   DEFAULT_GAME_OPTIONS,
   DEFAULT_RESULT_MULTIPLIERS,
   DEFAULT_SETTINGS,
   firstHoleNumber,
 } from './types'
+import { getGame } from './games'
 import type { Course } from './courses/types'
 import { isValidCourse, normalizeCourse } from './courses/types'
 import { localeTag } from './i18n'
@@ -124,6 +126,15 @@ export function normalizeRound(round: Round): Round {
         ...('doubleClosingHoles' in settings
           ? { doubleClosingHoles: Boolean(settings.doubleClosingHoles) }
           : {}),
+        // Dohrané kolo bez volby „Uplatňovat HCP" se hrálo v době, kdy se
+        // birdie a eagle počítaly z netto ran vždycky. Archiv musí zůstat
+        // takový, jak se hrálo a jak se za něj zaplatilo - nová výchozí
+        // hodnota (brutto) platí až pro kola založená potom.
+        ...(settings.options !== undefined &&
+        !('multipliersWithHandicap' in settings.options) &&
+        round.finishedAt !== undefined
+          ? { multipliersWithHandicap: true }
+          : {}),
         ...(settings.options ?? {}),
         resultMultipliers: {
           ...DEFAULT_RESULT_MULTIPLIERS,
@@ -187,6 +198,24 @@ export function archiveRound(round: Round): void {
   write(ARCHIVE_KEY, [round, ...rest].slice(0, ARCHIVE_LIMIT))
 }
 
+/**
+ * Přepíše kolo, které v archivu už je, **na jeho místě**.
+ *
+ * `archiveRound()` staví nejnovější kolo na začátek seznamu, což je správné
+ * při ukládání dohraného kola, ale ne při dodatečné opravě: oprava skóre
+ * z loňska by tím kolo vytáhla na první místo v archivu i na domovskou
+ * obrazovku jako „poslední odehraná hra". Kolo, které v archivu není, se
+ * neukládá - editace se vždycky týká existujícího záznamu.
+ */
+export function updateArchivedRound(round: Round): void {
+  const archive = loadArchive()
+  if (!archive.some((r) => r.id === round.id)) return
+  write(
+    ARCHIVE_KEY,
+    archive.map((r) => (r.id === round.id ? round : r)),
+  )
+}
+
 export function deleteArchivedRound(roundId: string): void {
   write(
     ARCHIVE_KEY,
@@ -220,6 +249,24 @@ export function saveSettings(settings: RoundSettings): void {
  * Volby bodování se pamatují zvlášť pro každou hru - Best + Součet a Skins
  * mají jiné extra body a nemá smysl je přepisovat jedno druhým.
  */
+/**
+ * Výchozí hodnoty extra bodů pro hru.
+ *
+ * U her, kde jsou extra body **vedlejší sázka** (jamkovka, Stableford, Dots),
+ * jsou nulové: nabídnout je má appka všude, ale hrát se o ně začne teprve
+ * tehdy, když si někdo hodnotu zadá. Hry, které je mají v bodování odjakživa,
+ * si nechávají hodnoty z katalogu.
+ */
+function defaultBonusValues(gameId: string): Record<BonusId, number> {
+  if (!getGame(gameId).scoringOptions.bonusesAsSideBet) {
+    return DEFAULT_GAME_OPTIONS.bonusValues
+  }
+  return Object.fromEntries(BONUSES.map((bonus) => [bonus.id, 0])) as Record<
+    BonusId,
+    number
+  >
+}
+
 export function loadGameOptions(gameId: string): GameOptions {
   const all = read<Record<string, GameOptions>>(GAME_OPTIONS_KEY) ?? {}
   const stored: Partial<GameOptions> = all[gameId] ?? {}
@@ -227,7 +274,7 @@ export function loadGameOptions(gameId: string): GameOptions {
     ...DEFAULT_GAME_OPTIONS,
     ...stored,
     bonusValues: {
-      ...DEFAULT_GAME_OPTIONS.bonusValues,
+      ...defaultBonusValues(gameId),
       ...(stored.bonusValues ?? {}),
     },
     resultMultipliers: {

@@ -185,6 +185,15 @@ export interface GameOptions {
   /** Nearest platí jen při paru a lepším, jinak bod bere soupeř. */
   confirmNearest: boolean
   /**
+   * Násobí se extra body podle **netto** výsledku jamky?
+   *
+   * Ve výchozím stavu ne: rozdané rány mění to, kdo jamku vyhrál, ne to, jak
+   * se zahrála, takže násobič stojí na skutečném birdie (brutto). Se zapnutou
+   * volbou se v netto kole násobí podle osobního paru - kdo dostane na jamce
+   * ránu a zahraje par, má netto birdie a extra bod se mu znásobí.
+   */
+  multipliersWithHandicap: boolean
+  /**
    * V netto kole se **Longest** potvrzuje osobním parem - parem jamky plus
    * ranami, které na ní hráč podle handicapu dostává.
    *
@@ -217,6 +226,8 @@ export const DEFAULT_GAME_OPTIONS: GameOptions = {
   noDoubleBonuses: false,
   confirmLongest: true,
   confirmNearest: true,
+  // Násobič stojí na skutečném výsledku; osobní par je volba, ne výchozí stav.
+  multipliersWithHandicap: false,
   confirmByPersonalPar: true,
   dotVariant: 'nine',
   // Obě nadstavby jsou volitelné pravidlo, ne základ hry - proto vypnuté.
@@ -570,34 +581,6 @@ export function availableBonuses(round: Round, hole: number): BonusDefinition[] 
   ).sort((a, b) => (a.onlyPar ? -1 : 0) - (b.onlyPar ? -1 : 0))
 }
 
-/**
- * Kolik bodů má hráč na jamce zapsáno v extra bodech - do odznaku u zápisu.
- * Longest a Nearest se počítají v základní hodnotě, protože o jejich přiznání
- * rozhoduje až potvrzovací pravidlo.
- */
-export function playerBonusPoints(
-  round: Round,
-  playerId: PlayerId,
-  hole: number,
-): number {
-  const values = round.settings.options.bonusValues
-  const diff = diffToPar(round, playerId, hole)
-
-  let total = 0
-  for (const bonusId of bonusesAt(round, playerId, hole)) {
-    const bonus = getBonus(bonusId)
-    if (!bonus || bonus.kind === 'multiplier') continue
-    const value = values[bonusId] ?? 0
-    total += bonus.exclusive
-      ? value
-      : value *
-        (diff === null
-          ? 0
-          : bonusMultiplier(diff, round.settings.options.resultMultipliers))
-  }
-  return total
-}
-
 /** Extra body, které má hráč zapsané na jamce. */
 export function bonusesAt(round: Round, playerId: PlayerId, hole: number): BonusId[] {
   return round.bonuses?.[playerId]?.[hole] ?? []
@@ -676,6 +659,28 @@ export function playerName(round: Round, playerId: PlayerId): string {
   return round.players.find((p) => p.id === playerId)?.name ?? '?'
 }
 
+/**
+ * Krátké jméno hráče do těsných míst - hlavička jamky.
+ *
+ * Bere první slovo jména, protože „Alexandra Pániková 2 UP" se vedle druhého
+ * zápasu do hlavičky nevejde a uříznuté „Alexandra Pánik…" je horší než
+ * „Alexandra". Když se dva hráči v kole na prvním slově shodnou, přibere
+ * ještě první písmeno toho dalšího - jinak by se stavy zápasů popletly.
+ */
+export function shortPlayerName(round: Round, playerId: PlayerId): string {
+  const full = playerName(round, playerId)
+  const [first, ...rest] = full.trim().split(/\s+/)
+  if (!first || rest.length === 0) return full
+
+  const shared = round.players.some(
+    (other) => other.id !== playerId && other.name.trim().split(/\s+/)[0] === first,
+  )
+  if (!shared) return first
+
+  const initial = rest[0]?.[0]
+  return initial ? `${first} ${initial}.` : full
+}
+
 export function scoreAt(round: Round, playerId: PlayerId, hole: number): number | null {
   return round.scores[playerId]?.[hole] ?? null
 }
@@ -692,7 +697,48 @@ export function diffToPar(round: Round, playerId: PlayerId, hole: number): numbe
 
 /** Součet ran hráče přes zapsané jamky. */
 export function strokeTotal(round: Round, playerId: PlayerId): number {
-  return (round.scores[playerId] ?? []).reduce<number>((sum, s) => sum + (s ?? 0), 0)
+  return strokeTotalBetween(round, playerId, 0, round.holeCount)
+}
+
+/**
+ * Součet ran na části kola; `from` se počítá, `to` už ne. Meze jsou indexy
+ * jamek od nuly, ne čísla jamek pro hráče - výřez hřiště čísluje jinak
+ * (viz `holeNumber()`), ale první devítka kola jsou vždycky indexy 0 až 8.
+ *
+ * Nezapsaná jamka se počítá jako nula, stejně jako v celkovém součtu -
+ * mezisoučet rozehraného kola tak roste s tím, co je zapsané.
+ */
+export function strokeTotalBetween(
+  round: Round,
+  playerId: PlayerId,
+  from: number,
+  to: number,
+): number {
+  return (round.scores[playerId] ?? [])
+    .slice(from, to)
+    .reduce<number>((sum, s) => sum + (s ?? 0), 0)
+}
+
+/**
+ * Součet parů na části kola; meze jako u `strokeTotalBetween()`.
+ *
+ * Bere se přes `parAt()`, ne přímo z `round.pars` - u kola bez hřiště je pole
+ * parů prázdné a jamka pak má výchozí par.
+ */
+export function parTotalBetween(round: Round, from: number, to: number): number {
+  let total = 0
+  for (let hole = from; hole < to; hole += 1) total += parAt(round, hole)
+  return total
+}
+
+/**
+ * Jamka, po které se na scorekartě ukáže mezisoučet, nebo `undefined`, když
+ * se nikde neukazuje. Osmnáctka se dělí na devítky přesně jako turnajová
+ * scorekarta (OUT/IN); kratší kolo se nedělí - mezisoučet po devíti jamkách
+ * z dvanáctky nic neříká.
+ */
+export function turnHole(round: Round): number | undefined {
+  return round.holeCount === 18 ? 9 : undefined
 }
 
 /** Kolik jamek už má hráč zapsaných. */
@@ -783,6 +829,11 @@ export function isRoundComplete(round: Round): boolean {
 }
 
 /** Hráči daného týmu v pořadí, v jakém jsou v týmu uvedení. */
+/** Dvojice, ve které hráč je; u her bez dvojic vrací undefined. */
+export function teamOf(round: Round, playerId: PlayerId): Team | undefined {
+  return round.teams.find((team) => team.playerIds.includes(playerId))
+}
+
 export function teamPlayers(round: Round, team: Team): Player[] {
   return team.playerIds
     .map((id) => round.players.find((p) => p.id === id))

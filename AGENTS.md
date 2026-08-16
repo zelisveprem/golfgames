@@ -96,6 +96,14 @@ Tohle nejsou preference, ale věci, které v projektu drží konzistenci:
     pod 700 px (iPhone SE) se čtyři hráči nevejdou zhruba o 200 px už dlouho;
     test to drží jako `fixme`, aby se na to nezapomnělo.
 
+11. **Zapsané skóre se nikdy nesmaže.** Jediný, kdo smí zápis na jamce zrušit,
+    je hráč sám (přidržení čísla v zápisu skóre). Žádná jiná změna - dvojice,
+    hra, soupeři, par, nastavení bodování, oprava archivního kola - nesmí
+    `Round.scores` vyprázdnit ani zkrátit. Když nové nastavení znamená jiný
+    výsledek, kolo se **přepočítá** ze zapsaného skóre; hry ho počítají až při
+    zobrazení, takže přepočet nic ukládat nemusí. Hraje se o peníze a zápis
+    z jamky se zpětně nedohledá.
+
 ## Nejčastější zdroje chyb
 
 - **Vzdaná vs. nehraná jamka.** `scores[player][hole] === null` znamená buď
@@ -103,12 +111,16 @@ Tohle nejsou preference, ale věci, které v projektu drží konzistenci:
   `isHoleStarted()`: když na jamce zapsal aspoň jeden hráč, jamka běží a komu
   zápis chybí, ten ji vzdal. Každá nová hra to musí ošetřit. Ve výpočtech se
   vzdaná hodnota reprezentuje jako `CONCEDED` (`Infinity`).
-- **Netto se promítá do vítěze jamky, ne do hodnoty extra bodů.** Kdo jamku
-  vyhrál (skin, `BEST`, součet, match play), se počítá z `netScoreAt()`.
-  Násobič extra bodu podle výsledku se ale bere z **brutto** `diffToPar()` -
-  jinak by hráč s tečkou dostal za bunker na par dva body. Jediná výjimka je
-  potvrzení **Longestu** (`exclusiveBonusOutcome()` v `handicap.ts`), které
-  stojí na osobním paru; Nearest se potvrzuje vždycky brutto.
+- **Netto rozhoduje o vítězi jamky, ne o tom, co je birdie.** Kdo jamku vyhrál
+  (skin, `BEST`, součet, match play, pořadí v Dots), se počítá z `netScoreAt()`
+  vždycky - to je pravidlo hry. **Bonus za výsledek** (birdie a eagle v Best +
+  Součtu a Levé-Pravé, násobič extra bodů, birdie ke smetení v Dots) se ale bere
+  z **brutto** ran, jinak by hráč s tečkou dostal za bunker na par dva body.
+  Rozhoduje o tom jediná funkce `bonusDiffToPar()` v `handicap.ts` a volba
+  **Uplatňovat HCP** (`multipliersWithHandicap`, výchozí vypnuto), která ji
+  přepne na osobní par. Každý nový výpočet bonusu za výsledek se musí ptát jí,
+  ne `diffToPar()` ani `netDiffToPar()` napřímo. Potvrzení **Longestu** má
+  vlastní volbu (`exclusiveBonusOutcome()`); Nearest se potvrzuje vždycky brutto.
 - **Číslo jamky není `hole + 1`.** Kolo se nehraje vždycky na celé hřiště:
   osmnáctku jde hrát jen na jednu devítku a resort s 27 jamkami osmnáctku
   teprve skládá ze dvou svých devítek. Kolo pak má `holeCount` hraných jamek,
@@ -137,6 +149,22 @@ Tohle nejsou preference, ale věci, které v projektu drží konzistenci:
 - **První sekce z `computeStandings()` je podkladem pro peníze.** Její
   `row.value` se předává do `settleRound()` jako počet jednotek; u Skins je
   to součet skinů a přiznaných extra bodů.
+- **Společný míč se ukládá oběma partnerům.** U hry, která deklaruje
+  `sharedBall` (Foursome), má dvojice na jamku jedno skóre, ale `Round.scores`
+  zůstává po hráčích - hodnotu zapíše `App.setScore()` obou partnerům
+  (rozhodnutí #33). Netto dvojice počítá `pairPlayingHandicap()`, ne handicap
+  jednotlivce.
+- **Dva zápasy v jednom kole si nemíchají peníze.** Hra s `settlementGroups()`
+  se vyrovnává po skupinách přes `settleGroups()`; `settleRound()` by počítal
+  každého proti každému (rozhodnutí #34).
+- **Stránka se neposouvá, posouvá se `.content`.** Obrazovka je vysoká jako
+  displej (rozhodnutí #32), takže `window.scrollY` je vždycky nula
+  a `window.scrollTo()` nic nedělá. Nový kód pracuje se `scrollTop` na
+  `.content`; hlavička a patička se posouvat nemají.
+- **Oprava archivního kola nejde přes `archiveRound()`.** Ta staví kolo na
+  začátek archivu, takže by oprava loňské hry z ní udělala „poslední
+  odehranou". Zpětná editace používá `updateArchivedRound()` a míří do
+  archivu, ne do rozehraného kola (rozhodnutí #31).
 - **Nesahej na hotový build.** `dist/` je v `.gitignore` a generuje ho CI.
 - **Firestore odmítá `undefined`** a shodí tím celý zápis chybou
   `invalid-argument`. `normalizeCourse()` ho do hřiště zapisuje záměrně
@@ -167,6 +195,7 @@ src/
   money.ts     přepočet bodů na peníze
   backup.ts    export a import dat do souboru JSON
   pwa.ts       detekce standalone režimu a instalace PWA na plochu
+  swipeBack.ts tažení od levého okraje jako „zpět" (v PWA není systémové)
   sync/        nepovinná záloha do Firestore (líné načtení SDK)
   i18n/        překlady: cs.ts je zdroj pravdy pro klíče, en.ts musí sedět
   games/       pravidla her (GameDefinition), registr v index.ts

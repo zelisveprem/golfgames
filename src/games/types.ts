@@ -1,4 +1,4 @@
-import type { BonusId, PlayerId, Round } from '../types'
+import type { BonusId, PlayerId, Round, Team } from '../types'
 
 /**
  * Společné rozhraní všech her.
@@ -117,6 +117,42 @@ export interface GameScoringOptions {
   doubleSweepOnBirdie?: boolean
   /** Komu připadne běžný bonus: celé dvojici, nebo jednotlivci. */
   bonusScope: 'team' | 'player'
+  /**
+   * Jsou extra body **vedlejší sázka** mimo bodování hry?
+   *
+   * Hry, které samy rozdávají body (Best + Součet, Levá-Pravá, Skins), si je
+   * počítají do svých bodů. Jamkovka, Stableford ani Dots to nemohou - přičtení
+   * bonusu k vyhraným jamkám by rozbilo stav zápasu. U nich stojí extra body
+   * zvlášť (`sideBets.ts`): vlastní tabulka, body do vyrovnání kola a hodnoty
+   * **ve výchozím stavu nulové**, takže se o ně hraje teprve po zapnutí.
+   */
+  bonusesAsSideBet?: boolean
+}
+
+/**
+ * Přesný rozpis bodů jedné strany na jedné jamce - „proč mám tři body".
+ *
+ * Hra ho dodá, když se její body skládají z víc zdrojů (BEST, součet, birdie,
+ * extra body). Obrazovka ho jen vypíše, takže se nemusí ptát na pravidla.
+ */
+export interface HoleBreakdown {
+  /** Id dvojice nebo hráče, ke kterému rozpis patří. */
+  id: string
+  name: string
+  lines: {
+    /**
+     * Druh zdroje. Shrnutí jamky vypisuje vedle BESTu a součtu právě ty
+     * ostatní, aby bylo vidět, o jaké body navíc jde.
+     */
+    kind: 'best' | 'aggregate' | 'doubleBest' | 'result' | 'extra'
+    /** Z čeho bod je: „BEST", „Birdie", „Bunker (sandie)". */
+    label: string
+    /** Čím je to podložené: „netto 3 proti 4", „Alexandra, netto 3". */
+    note?: string
+    /** Kolik to vyneslo; nula znamená „nezískáno". */
+    points: number
+  }[]
+  total: number
 }
 
 /** Průběžné skóre, které hra zobrazí vedle hlavičky aktuální jamky. */
@@ -126,6 +162,12 @@ export interface HeaderSummary {
     value: string
     highlight?: boolean
     tone?: 'positive' | 'negative' | 'neutral'
+    /**
+     * Krátká poznámka jen k tomuhle stavu (dormie, konec zápasu). Patří sem,
+     * když v kole běží víc samostatných zápasů - společná poznámka pod nimi
+     * by netvrdila, kterého z nich se týká.
+     */
+    note?: string
   }[]
   note?: string
   tone?: 'normal' | 'dormie' | 'decided' | 'outOfPlay'
@@ -182,10 +224,43 @@ export interface GameDefinition {
    * se počítá na jamky, kde by dvojnásobná jamka rozbila stav zápasu.
    */
   supportsDoubleHoles: boolean
+  /**
+   * Hraje dvojice **jedním míčem** (foursome)? Zápis skóre je pak jeden na
+   * dvojici a ukládá se oběma partnerům; scorekarta má jeden sloupec.
+   */
+  sharedBall?: boolean
+  /**
+   * Co `Round.teams` v téhle hře znamená: partnery jedné strany (výchozí),
+   * nebo soupeře jednoho zápasu. Rozhoduje o textech při zakládání kola
+   * i o tom, jak se čtou dvojice ve výsledcích.
+   */
+  pairingKind?: 'partners' | 'opponents'
+  /** Vlastní pojmenování dvojice, když „A + B" nesedí (dva zápasy: „A vs B"). */
+  teamLabel?(round: Round, team: Team): string
+  /**
+   * Nezávislá peněžní vyrovnání v jednom kole - vrací id řádků výsledkové
+   * tabulky, které se vyrovnávají spolu. Bez hodnoty se vyrovnává celé kolo
+   * jako jedna hra. Dva zápasy ve flightu si takhle nemíchají peníze.
+   */
+  settlementGroups?(round: Round): string[][]
+  /**
+   * Strany peněžního vyrovnání, když se nekryjí s hlavní tabulkou.
+   *
+   * Bez hodnoty se vyrovnává první tabulka podle `row.value`. Hry s vedlejší
+   * sázkou (`bonusesAsSideBet`) tady k jednotkám hry přidají extra body -
+   * do tabulky se přičíst nemohou, protože ta drží pořadí podle pravidel hry.
+   */
+  settlementParties?(round: Round): { id: string; name: string; units: number }[]
   computeStandings(round: Round): StandingsSection[]
   holeSetup?(round: Round, hole: number): HoleSetup
   setHoleSetup?(round: Round, hole: number, selection: HoleSetupSelection): Round
   holeSummary?(round: Round, hole: number): HoleSummary[]
+  /**
+   * Rozpis bodů jamky do posledního bodu. Bez něj se u shrnutí jamky
+   * nenabízí odkaz na podrobnosti - u hry, kde jamka jen padne nebo nepadne,
+   * není co rozepisovat.
+   */
+  holeBreakdown?(round: Round, hole: number): HoleBreakdown[]
   headerSummary?(round: Round, hole: number): HeaderSummary
   scorecardPlayerCell?(round: Round, playerId: string, hole: number): ScorecardPlayerCell
   scorecardPlayerTotal?(round: Round, playerId: string): ScorecardPlayerTotal

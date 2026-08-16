@@ -68,7 +68,6 @@ export const en: Record<MessageKey, Message> = {
   'players.noTeePreference': 'No default tee',
 
   // --- setup --------------------------------------------------------------
-  'setup.title': 'Golf Games',
   'setup.subtitle': 'New round',
   'setup.next': 'Next',
   'setup.stepTeeTitle': 'Tees and holes',
@@ -86,6 +85,14 @@ export const en: Record<MessageKey, Message> = {
   'setup.addPlayer': 'Add {name} to the round',
   'setup.allPlayersUsed': 'All saved players are already in the round.',
   'setup.pairs': 'Pairs',
+  'setup.pairsChoose': 'Choose pairs',
+  'setup.pairsHint': 'Pairs can be changed during the round; results are recalculated.',
+  'setup.opponentsHint':
+    'Who plays whom can be changed during the round; both matches are recalculated.',
+  'setup.pairsEditHint':
+    'The change applies right away and the round is recalculated from hole one. Entered scores are kept.',
+  'setup.editRoundSubtitle': 'Round setup',
+  'setup.backToRound': 'Back to the round',
   'setup.versus': 'vs',
   'setup.stake': 'Stake',
   'setup.pointValue': 'Point value',
@@ -130,6 +137,7 @@ export const en: Record<MessageKey, Message> = {
   'setup.netScoring': 'Play with handicap strokes (net)',
   'setup.handicapIndex': 'Index',
   'setup.handicapStrokes': 'Strokes',
+  'setup.handicapShort': 'HCP',
   'setup.handicapFor': 'Handicap for {name}',
   'setup.noHandicap': 'no HCP',
   'setup.strokesGiven': { one: '{count} stroke', other: '{count} strokes' },
@@ -142,7 +150,7 @@ export const en: Record<MessageKey, Message> = {
   'setup.backup': 'Data backup',
   'setup.signIn': 'Sign in and back up',
   'setup.account': 'Account and sync',
-  'pwa.installApp': 'Add Golf Games to home screen',
+  'pwa.installApp': 'Add Fairsome to home screen',
   'pwa.installAppBenefit':
     'Open the app with one tap without the address bar. Scoring stays available even without a signal.',
   'pwa.installIosTitle': 'Add to home screen',
@@ -158,7 +166,9 @@ export const en: Record<MessageKey, Message> = {
   'setup.offlineShort': 'offline',
 
   // --- playing ------------------------------------------------------------
+  'play.backToSetup': 'Back to round setup',
   'play.previousHole': 'Previous hole',
+  'play.nextHole': 'Next hole',
   'play.hole': 'Hole {number}',
   'play.par': 'Par',
   'play.noScore': 'no score yet',
@@ -169,16 +179,21 @@ export const en: Record<MessageKey, Message> = {
   'play.plus': '{name}: one stroke more, bogey from an empty cell',
   'play.hint':
     'Tap the middle to enter par ({par}), − for a birdie and + for a bogey. Press and hold the number to clear it.',
+  'play.strokesReceivedPair': {
+    one: 'The pair receives 1 stroke on this hole',
+    other: 'The pair receives {count} strokes on this hole',
+  },
   'play.strokesReceived': {
     one: 'Receives {count} stroke on this hole',
     other: 'Receives {count} strokes on this hole',
   },
-  'play.standings': 'Current standings',
-  'play.finish': 'Finish round',
-  'play.account': 'Account and backup',
+  'play.standings': 'Standings',
+  'play.finish': 'Finish',
+  'play.account': 'Account',
   'play.next': 'Next hole',
   'play.skip': 'Skip to next',
   'play.finishAndSave': 'Finish and save round',
+  'play.saveEdits': 'Done, back to archive',
   'play.incompleteTitle': 'The round is not complete.',
   'play.incompleteConceded':
     'Missing scores on holes {holes} – they will count as conceded.',
@@ -227,6 +242,9 @@ export const en: Record<MessageKey, Message> = {
   'gameSettings.multipliers': 'Result multipliers',
   'gameSettings.multipliersHint':
     'How many times the extra point counts when the hole is played under par. Par always counts once.',
+  'gameSettings.multipliersWithHandicap': 'Apply handicap',
+  'gameSettings.multipliersWithHandicapNote':
+    'Unchecked, the multiplier follows the actual score - a birdie means one under the hole par. Checked, a net round uses personal par, so a player who gets a stroke on the hole only needs a par.',
   'gameSettings.multiplierFor': 'Multiplier for {name}',
   'gameSettings.otherOptions': 'Other options',
   'gameSettings.doubleClosing': 'Holes 9 and 18 count double',
@@ -334,7 +352,7 @@ export const en: Record<MessageKey, Message> = {
   'backup.summary': 'The archive holds {count} rounds',
   'backup.summaryAdded': '{count} of them new',
   'backup.summaryCurrent': 'the round in progress was restored too',
-  'backup.errorInvalid': 'This file is not a Golf Games backup, or it is damaged.',
+  'backup.errorInvalid': 'This file is not a Fairsome backup, or it is damaged.',
   'backup.errorTooNew':
     'The backup comes from a newer version of the app. Update the app and try again.',
 
@@ -468,6 +486,14 @@ export const en: Record<MessageKey, Message> = {
   'games.match-play.tagline': 'A match played by holes, not by strokes',
   'games.match-play.rules':
     'A match between two sides – either two players, or two pairs where the better ball counts. Whoever plays the hole better goes one up; a tied hole is halved. The match ends once the lead is greater than the number of remaining holes.',
+  'games.foursome.name': 'Foursome',
+  'games.foursome.tagline': 'One ball per pair, played by holes',
+  'games.foursome.rules':
+    'Match play between two pairs sharing a single ball: the pair tees off once and then alternates shots, so it has one score per hole. Whoever plays the hole better goes one up; a tied hole is halved. One score is entered per pair. With net scoring the pair receives strokes from half the sum of both partners’ playing handicaps.',
+  'games.singles-matches.name': 'Two singles matches',
+  'games.singles-matches.tagline': 'Four players in one flight, two separate matches',
+  'games.singles-matches.rules':
+    'Four players go round together in one flight, but play two separate singles matches – pick who plays whom under Opponents. Each match counts on its own, money included: the result of one has no effect on the other. Whoever plays the hole better goes one up; a tied hole is halved.',
   'games.stableford.name': 'Stableford',
   'games.stableford.tagline': 'Points per hole, one bad hole cannot ruin the round',
   'games.stableford.rules':
@@ -478,6 +504,22 @@ export const en: Record<MessageKey, Message> = {
     'A game for three players. Every hole puts a fixed number of points at stake and splits them by rank. Nine Dot awards 9 points: 5-3-1, 4-4-1 when the two best tie, 5-2-2 when the two worst tie and 3-3-3 when all three tie. Six Dot awards 6 points: 4-2-0, 3-3-0, 4-1-1 and 2-2-2. The variant and both extra rules are set in the scoring settings.',
 
   // Best Aggregate
+  // --- hole points breakdown ----------------------------------------------
+  'breakdown.title': 'Points breakdown',
+  'breakdown.subtitle': '{name} · hole {hole}',
+  'breakdown.open': 'Points breakdown: {name}',
+  'breakdown.versus': '{own} against {other}',
+  'breakdown.net': 'net {value}',
+  'breakdown.gross': 'gross {value}',
+  'breakdown.total': 'Points for the hole',
+  'breakdown.empty': 'Nothing to break down on this hole yet.',
+  'breakdown.doubled': 'This hole counts double.',
+  'breakdown.pending': 'recorded by {name} – not confirmed yet',
+  'breakdown.forfeited': 'forfeited, recorded by {name}',
+  'breakdown.handicapOn': 'Birdies and eagles are judged net (Apply handicap).',
+  'breakdown.handicapOff': 'Birdies and eagles are judged from gross strokes.',
+  'best.doubleBest': 'Double Best',
+  'best.doubleBestNote': 'both balls better than the opponents',
   'best.points': 'Points',
   'best.headerNote': 'Current score',
   'best.pointsDescription':
@@ -555,6 +597,8 @@ export const en: Record<MessageKey, Message> = {
   'dot.columnAria': '{name}: points for the hole',
 
   // Course editor
+  'scorecard.turnShort': 'OUT',
+  'scorecard.turn': 'Front nine subtotal',
   'scorecard.strokeIndex': 'Stroke index of the hole',
   'scorecard.strokeIndexShort': 'SI',
   'scorecard.title': 'Scorecard',
@@ -598,7 +642,7 @@ export const en: Record<MessageKey, Message> = {
   'picker.addFavorite': 'Add {name} to favorites',
   'picker.removeFavorite': 'Remove {name} from favorites',
   'picker.noCourseMeta': 'Pars are set while playing, handicaps are not used.',
-  'picker.credit': 'Courses from the open Golf Games catalogue, ODbL licensed.',
+  'picker.credit': 'Courses from the open Fairsome catalogue, ODbL licensed.',
   'picker.creditLink': 'Source and corrections',
   'picker.holes': { one: '{count} hole', other: '{count} holes' },
   'picker.loops': { one: '{count} nine', other: '{count} nines' },
@@ -677,6 +721,7 @@ export const en: Record<MessageKey, Message> = {
     one: 'dormie · {count} hole left',
     other: 'dormie · {count} holes left',
   },
+  'match.dormieOnly': 'dormie',
   'match.resultShort': '{lead}&{remaining}',
   'match.finalShort': 'final · {lead} UP',
   'match.finishedShort': 'finished',
@@ -687,7 +732,23 @@ export const en: Record<MessageKey, Message> = {
   'match.hole': 'Hole',
   'match.outOfPlay': 'Out of play - the match is already decided',
 
+  // Foursome and two singles matches in one flight
+  'foursome.net': 'Pair net',
+  'foursome.pairHandicap': 'pair HCP {handicap}',
+  'singles.title': 'Matches in the flight',
+  'singles.versusJoin': ' vs. ',
+  'singles.versusDetail': 'vs. {name} · won {won} · halved {halved}',
+  'singles.opponents': 'Opponents',
+
   // --- money settlement ---------------------------------------------------
+  // --- extra points as a side bet -----------------------------------------
+  'sideBets.title': 'Extra points',
+  'sideBets.description':
+    'A side bet outside the rules of the game; points are added to the round settlement.',
+  'sideBets.settingsHint':
+    'Extra points are a side bet: they start at zero and count only once you set a value.',
+
+  'money.perGroup': 'Each match settles on its own.',
   'money.nobodyOwes': 'Nobody owes anybody anything.',
   'money.eachOpponent': 'Every extra point is paid by each opponent separately.',
   'money.optimizedSettlement':

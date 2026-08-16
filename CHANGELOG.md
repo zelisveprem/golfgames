@@ -7,6 +7,233 @@ Patch verzi zvedá `scripts/bump-version.mjs` automaticky při každém lokáln�
 buildu, takže čísla patch verzí mezi záznamy nejsou souvislá. Zapisují se sem
 jen verze s věcnou změnou.
 
+## [0.48.0] – 2026-08-14
+
+### Změněno
+
+- **Sloučeno s Martinovým repem (0.40.6 → 0.47.0).** Foursome a dvě
+  jamkovky 1 na 1, extra body jako vedlejší sázka ve všech hrách, volba
+  Uplatňovat HCP, dvojice na vlastním kroku (jde měnit i během kola),
+  dodatečná oprava archivovaného kola, mezisoučet po devítce na
+  scorekartě, gesto zpět tažením od okraje a plné přejmenování appky na
+  Fairsome (manifest, titulek, i18n). Vlastní úpravy (výchozí odpaliště
+  hráče, Poslední hry, Předchozí/Další v zápisu skóre, odebraný odkaz
+  Účet a záloha ze zápisu skóre) zůstávají zachované navrch.
+
+## [0.47.0] – 2026-08-14
+
+### Změněno
+
+- **Volba „Uplatňovat HCP" teď rozhoduje i o birdie a eagle v bodování hry.**
+  Dřív platila jen pro násobič extra bodů, zatímco body za birdie a eagle
+  v Best + Součtu a Levé-Pravé se počítaly z netto ran vždycky. Dvě různá
+  pravidla pro „co je birdie" v jedné hře se nedala uhádnout: dvojice měla za
+  jamku, kde nikdo birdie nedal, tři body. Bez zaškrtnutí (výchozí stav) se
+  teď birdie i eagle posuzují **z brutto ran** – tedy proti paru jamky – a to
+  včetně „birdie" u smetení v Dots. Se zaškrtnutím platí netto jako dosud.
+  Co se nemění: kdo jamku vyhrál (BEST, součet, skin, jamkovka, pořadí v Dots,
+  body ve Stablefordu) se v netto kole počítá z netto ran dál.
+- **Dohraná kola v archivu si nechávají pravidlo, se kterým se hrála.** Kolo
+  odehrané dřív, než volba existovala, se dál počítá s netto birdie – jinak by
+  se zpětně změnily body i dávno vyrovnané peníze.
+
+### Přidáno
+
+- **Šipka zpět u čísla jamky vede z první jamky na nastavení kola.** Dřív byla
+  na první jamce nečinná; teď otevře krok s hrou a dvojicemi.
+- **Modré „i" u shrnutí jamky otevře přesný rozpis bodů.** Každý zdroj zvlášť
+  i s číslem, ze kterého se rozhodovalo (`netto 3 proti 4`), a s nulami
+  u bonusů, které se nepočítaly – „Water · netto 5 → 0" je stejně důležitá
+  odpověď jako přiznaný bod.
+
+## [0.46.0] – 2026-08-14
+
+### Přidáno
+
+- **O extra body jde hrát v každé hře.** Longest, Nearest, bunker, voda,
+  barkie i arnie nabízela dřív jen Best + Součet, Levá-Pravá a Skins - tedy
+  hry, které samy rozdávají body. Jamkovka, Foursome, dvě jamkovky ve flightu,
+  Stableford a Dots je teď nabízejí jako **vedlejší sázku**: mají vlastní
+  tabulku „Extra body" ve výsledcích a body se přidávají do peněžního
+  vyrovnání kola (u dvou jamkovek v rámci zápasu). Do hlavní tabulky se
+  nepřičítají, aby `2 UP` pořád znamenalo dvě vyhrané jamky.
+- **Ve výchozím stavu jsou nulové**, takže se nikomu nic nemění: dokud si
+  hodnotu nezadáš v nastavení bodování hry, tlačítko s hvězdičkou se u zápisu
+  skóre vůbec nenabídne. Hry, které extra body počítaly odjakživa, si nechávají
+  své dosavadní hodnoty.
+- **Volba „Uplatňovat HCP" pod násobiči za výsledek.** Bez zaškrtnutí
+  (výchozí stav) platí násobič jen za **skutečné** birdie, eagle a lepší, tedy
+  proti paru jamky. Se zaškrtnutím se v netto kole bere osobní par, takže
+  hráči, který na jamce dostává ránu, stačí par. Volba se ukládá ke hře jako
+  ostatní nastavení bodování a platí pro extra body ve všech hrách.
+
+## [0.45.0] – 2026-08-13
+
+### Přidáno
+
+- **Dvojice mají vlastní obrazovku a jdou změnit i během kola.** Volba dvojic
+  (u dvou jamkovek Soupeři) byla přilepená pod seznamem her, kde na telefonu
+  nebyla vidět bez rolování. Teď je to samostatný krok zakládání kola a
+  hlavně: dá se k němu vrátit i z rozehraného kola odkazem **Dvojice** pod
+  zápisem skóre. Změna se uplatní hned, kolo se přepočítá od první jamky a
+  zapsané skóre zůstává (nové nepřekročitelné pravidlo 11 v `AGENTS.md`).
+  Stejnou cestou jde v rozehraném kole změnit i hru.
+
+### Opraveno
+
+- **Zpět z rozehraného kola mazalo zadaná data.** Kroky zakládání zůstávaly
+  v historii prohlížeče, ale rozepsané kolo se po založení uklízí, takže zpět
+  nebo swipe přistálo na kroku s prázdnými jmény a výchozí hrou - a „Začít
+  kolo" pak rozehrané kolo i se zapsaným skóre přepsalo prázdným. Krok
+  zakládání teď platí jen pro stav, ke kterému patří; neplatný skončí tam,
+  kam patří kolo (zápis skóre, výsledky, domovská obrazovka).
+- **Dlouhé jméno schovalo tečky HCP a další značky.** Jméno i značky byly
+  v jednom oříznutém prvku, takže „Alexandra Pániková" spolkla tečky
+  handicapu i zisk z jamky. Zkracuje se teď jen jméno, značky zůstávají vždy.
+- **U dvou jamkovek nebylo poznat, koho se dormie týká.** Hlavička jamky má
+  teď jeden řádek na zápas se stavem i poznámkou (`Alexandra 2 UP dormie`) a
+  zbývající jamky jednou pod nimi. Místo „kdo s kým hraje" je v řádku jen
+  vedoucí hráč - soupeře ukazuje blok zápasu pod hlavičkou a stav zápasu se
+  v něm už neopakuje.
+- **Zápis skóre čtyř hráčů přerůstal displej.** Odkazy pod zápisem se lámaly
+  na dva řádky; kratší popisky (Výsledky, Dvojice, Ukončit, Účet) je vejdou
+  na jeden i se zapsaným skóre.
+
+## [0.44.1] – 2026-08-13
+
+### Opraveno
+
+- **Zápis skóre ukazoval nejvýš tři tečky HCP.** Hráč s indexem 54 má ze
+  slopovaného odpaliště hrací handicap nad 54, takže na nejtěžších jamkách
+  dostává **čtyři** rány - zápis skóre je ale zastropovával na tři, zatímco
+  scorekarta je vypisovala celé. Dvě obrazovky téhož kola si tak protiřečily
+  a dělená jamka (par 3, brutto 6 proti 3 s rozdílem tří ran) vypadala jako
+  chyba v bodování. Samotný výpočet byl správně, chyba byla jen v zobrazení;
+  teček je teď vždycky tolik, kolik ran hráč opravdu dostává. Stejně se
+  vypisují i rány dvojice u Foursome.
+
+## [0.44.0] – 2026-08-12
+
+### Přidáno
+
+- **Foursome.** Jamkovka dvou dvojic, které hrají jedním míčem: dvojice odpálí
+  jednou a dál se v ranách střídá, takže má na jamku jediné skóre. Zápis skóre
+  je proto jeden na dvojici (dva řádky místo čtyř) a scorekarta má jeden
+  sloupec na dvojici. Se zapnutým netto dostane dvojice rány z **poloviny
+  součtu** hracích handicapů obou partnerů, jak to pro foursome dělá WHS.
+  Skóre se ukládá oběma partnerům, takže archiv ani synchronizace nepotřebují
+  nový tvar dat (rozhodnutí #33 v `docs/decisions.md`).
+- **Dvě jamkovky 1 na 1.** Čtyři hráči v jednom flightu, ale dva samostatné
+  zápasy jednotlivců - kdo s kým, se vybírá v kroku hry pod jménem Soupeři.
+  Každý zápas má vlastní stav i **vlastní peněžní vyrovnání**: hráči z různých
+  zápasů si neplatí nic, i když jdou spolu. Rozehraná jamka je přitom
+  vlastnost zápasu, ne flightu - jinak by zápis prvního zápasu udělal ze
+  druhého vzdanou jamku (rozhodnutí #34).
+
+### Změněno
+
+- **Jamkovka má jedno jádro.** Stav zápasu, dormie, notace `3&2` a jamky mimo
+  hru po rozhodnutí žijí v `src/games/match.ts`; Match play, Foursome i dvě
+  jamkovky se o ně dělí a dodávají jen strany zápasu a ránu strany. Pravidlo
+  tak existuje jednou, ne třikrát.
+- **Přepínač plateb se nabízí jen tehdy, když něco mění.** Když optimalizované
+  vyrovnání vyjde stejně jako přímé platby (dva hráči, nezávislé zápasy), byly
+  to dva totožné seznamy a přepínač nad nimi jen zdržoval.
+
+## [0.43.1] – 2026-08-12
+
+### Opraveno
+
+- **Patička se při posouvání prstem odlepovala a překrývala obsah.** Obrazovka
+  byla vysoká podle obsahu, posouvala se celá stránka a patička s hlavním
+  tlačítkem se držela dole přes `position: sticky`. V nainstalované PWA na iOS
+  se při tažení prstem odlepila, zůstala stát doprostřed displeje a zakryla,
+  co bylo pod ní. Obrazovka je teď vysoká přesně jako displej a roluje se jen
+  obsah mezi hlavičkou a patičkou - ty se posouvat nemají, protože se pod nimi
+  nikdy nic neposouvá. Vedlejší efekt, který stojí za zmínku: **hlavička
+  zůstává vidět pořád**, takže tlačítko zpět je dosažitelné i uprostřed dlouhé
+  scorekarty, a nová obrazovka vždycky začíná na svém začátku místo aby
+  převzala posuv té předchozí. Rozhodnutí #32 v `docs/decisions.md`, hlídají
+  to testy „patička se posouváním obsahu nehýbe" a „stránka se neposouvá,
+  posouvá se obsah obrazovky".
+
+## [0.43.0] – 2026-08-12
+
+### Přidáno
+
+- **Archivní kolo se dá dodatečně opravit.** Detail odehraného kola byl jen ke
+  čtení, takže přehlédnutý zápis nebo špatně sečtená jamka se už nedaly
+  spravit - dohrané kolo šlo opravit jedině dokud bylo to poslední rozehrané.
+  V detailu je teď „Upravit skóre": otevře stejný zápis skóre jako na hřišti
+  (skóre, extra body, par i setup jamky u Levé-Pravé) a ukládá rovnou do
+  archivu. Kolo přitom zůstává na svém místě v archivu i na domovské
+  obrazovce - oprava loňské hry z ní neudělá „poslední odehranou"
+  (`updateArchivedRound()` v `src/storage.ts`). Opravuje se nezávisle na
+  rozehraném kole, takže dohrávané kolo na hřišti oprava jiného kola
+  neovlivní. Rozhodnutí #31 v `docs/decisions.md`.
+
+## [0.42.1] – 2026-08-11
+
+### Opraveno
+
+- **Z výběru hřiště nevedla cesta zpět.** První krok nového kola schovával
+  tlačítko Zpět s odůvodněním, že v prvním kroku není kam se vracet - jenže
+  vede se sem z domovské obrazovky, kde je menu s účtem, zálohou i archivem.
+  Kdo se dostal na výběr hřiště, uvízl: v nainstalované PWA není systémové
+  gesto zpět ani lišta prohlížeče, takže obrazovka bez tlačítka je slepá
+  ulička. Zpět je tam teď vždycky.
+
+### Přidáno
+
+- **Tažení od levého okraje jako „zpět".** Appka běží na ploše ve
+  `standalone` režimu, kde iOS ani Android žádné systémové gesto zpět
+  nedávají - v prohlížeči fungovalo, v nainstalované appce ne. Gesto teď
+  obsluhuje appka sama (`src/swipeBack.ts`). Vypíná se na výchozí obrazovce,
+  aby appku omylem neopustilo, a nespustí se, když tah začne uvnitř
+  scorekarty nebo čehokoli jiného, co se samo posouvá do stran. Doplněno
+  k rozhodnutí #27 v `docs/decisions.md`.
+
+## [0.42.0] – 2026-08-11
+
+### Změněno
+
+- **Appka se jmenuje Fairsome.** Dosud to byl jen wordmark na úvodní
+  obrazovce; jméno „Golf Games" zůstávalo v manifestu PWA, a telefon proto
+  při ukládání na plochu pořád nabízel staré jméno. Přejmenováno je i
+  v titulku stránky, na úvodní obrazovce před načtením appky, v nabídce
+  instalace, v hlášce u zálohy, v kreditu katalogu hřišť a na obrazovce
+  soukromí. Formát souboru zálohy se **nemění** - marker uvnitř zůstává
+  `golfgames-backup`, takže dosud vytvořené zálohy jdou naimportovat dál.
+  Zapsáno jako rozhodnutí #30 v `docs/decisions.md`.
+- **HCP se zadává přímo v řádku hráče.** Pole stálo na samostatném řádku pod
+  jménem; teď je mezi jménem a odpalištěm, takže se řádek čte zleva doprava
+  jako „kdo - s jakým handicapem - odkud". Kolik ran hráč dostane zůstává
+  drobným písmem pod polem - je to výsledek zadání, ne další pole.
+- **Řádky se součty ve scorekartě mají vlastní pruh.** Mezisoučet po devítce
+  i celkový součet dřív splývaly s jamkami: střídavý akcent hráčských sloupců
+  jde skrz celou tabulku a samotné tučné písmo se v mřížce plné značek
+  ztratilo.
+
+### Opraveno
+
+- **List s výběrem hodnoty neměl tlačítko Zavřít.** `PickSheet` (odpaliště
+  pro všechny, druhá devítka, filtr zemí) šel zavřít jen klepnutím vedle
+  něj - na rozdíl od výběru odpaliště, extra bodů i menu, které Zavřít mají.
+  U dlouhého seznamu zemí to byla jediná cesta ven a nebyla vidět.
+- **Čtečka obrazovky ohlašovala volby v listu jako přepínače.** `PickSheet`
+  má `role="radiogroup"`, ale řádky hlásily `aria-pressed`; teď je to
+  `role="radio"` s `aria-checked`.
+
+## [0.41.0] – 2026-08-11
+
+### Přidáno
+
+- **Mezisoučet po první devítce na scorekartě.** Kolo na osmnáct jamek má
+  teď pod devátou jamkou řádek `OUT` se součtem parů a ran každého hráče,
+  přesně jako turnajová scorekarta. Kratší kolo se nedělí - mezisoučet po
+  devíti jamkách z dvanáctky nic neříká. Sloupce her (skiny, body) se
+  nesčítají: jejich průběžná hodnota nemusí jít rozdělit na poloviny kola.
+
 ## [0.40.8] – 2026-08-11
 
 ### Přidáno

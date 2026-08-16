@@ -1,5 +1,5 @@
 import type { BonusId, PlayerId, Round, RoundTee } from './types'
-import { diffToPar, parAt, scoreAt } from './types'
+import { bonusMultiplier, bonusesAt, diffToPar, getBonus, parAt, scoreAt } from './types'
 import { localeTag } from './i18n'
 
 /**
@@ -286,6 +286,53 @@ export function netScoreAt(
   return score - strokesReceived(round, playerId, hole)
 }
 
+/**
+ * Hrací handicap dvojice, která hraje **jedním míčem** (foursome).
+ *
+ * WHS dává takové dvojici polovinu součtu hracích handicapů obou partnerů.
+ * Půlka se zaokrouhluje na celé rány, protože rány se přidělují po jamkách -
+ * půl rány na jamce neexistuje.
+ */
+export function pairPlayingHandicap(round: Round, playerIds: PlayerId[]): number {
+  if (playerIds.length === 0) return 0
+  const total = playerIds.reduce((sum, id) => sum + playingHandicap(round, id), 0)
+  return Math.round(total / 2)
+}
+
+/** Rány, které na jamce dostává dvojice hrající jedním míčem. */
+export function pairStrokesReceived(
+  round: Round,
+  playerIds: PlayerId[],
+  hole: number,
+): number {
+  if (!isNetRound(round)) return 0
+  const strokeIndex = roundStrokeIndex(round)[hole] ?? hole + 1
+  return strokesForHole(
+    pairPlayingHandicap(round, playerIds),
+    strokeIndex,
+    round.holeCount,
+  )
+}
+
+/**
+ * Netto rána dvojice hrající jedním míčem; null, dokud jamku nezapsala.
+ *
+ * Míč je jeden, ale `Round.scores` je po hráčích, takže zápis nese každý
+ * partner (viz rozhodnutí #33 v docs/decisions.md). Bere se první zapsaná
+ * hodnota - obě jsou stejné a jedna stačí i u kola, kde se zápis rozešel.
+ */
+export function pairNetScoreAt(
+  round: Round,
+  playerIds: PlayerId[],
+  hole: number,
+): number | null {
+  for (const id of playerIds) {
+    const score = scoreAt(round, id, hole)
+    if (score !== null) return score - pairStrokesReceived(round, playerIds, hole)
+  }
+  return null
+}
+
 /** Netto rozdíl vůči paru na jamce; null, dokud hráč jamku nezapsal. */
 export function netDiffToPar(
   round: Round,
@@ -308,6 +355,56 @@ export function netDiffToPar(
  * podle **brutto** výsledku, protože rozdané rány nemají s tím, jak se jamka
  * zahrála, nic společného.
  */
+/**
+ * Výsledek jamky, podle kterého se **násobí extra body**.
+ *
+ * Ve výchozím stavu brutto: rozdané rány mění to, kdo jamku vyhrál, ne to, jak
+ * se zahrála, takže hráč s ranou na jamce nemá za bunker na par dostat dva
+ * body. Volba „Uplatňovat HCP" (`multipliersWithHandicap`) to obrací - v netto
+ * kole se pak násobí podle osobního paru, takže kdo dostane ránu a zahraje par,
+ * má netto birdie. Na brutto kolo volba vliv nemá, tam žádný osobní par není.
+ */
+export function bonusDiffToPar(
+  round: Round,
+  playerId: PlayerId,
+  hole: number,
+): number | null {
+  return round.settings.options.multipliersWithHandicap && isNetRound(round)
+    ? netDiffToPar(round, playerId, hole)
+    : diffToPar(round, playerId, hole)
+}
+
+/**
+ * Kolik bodů má hráč na jamce zapsáno v extra bodech - do odznaku u zápisu.
+ * Longest a Nearest se počítají v základní hodnotě, protože o jejich přiznání
+ * rozhoduje až potvrzovací pravidlo.
+ *
+ * Bydlí tady, ne v `types.ts`, protože násobič může stát na osobním paru -
+ * a ten se bez rozdělení ran spočítat nedá.
+ */
+export function playerBonusPoints(
+  round: Round,
+  playerId: PlayerId,
+  hole: number,
+): number {
+  const values = round.settings.options.bonusValues
+  const diff = bonusDiffToPar(round, playerId, hole)
+
+  let total = 0
+  for (const bonusId of bonusesAt(round, playerId, hole)) {
+    const bonus = getBonus(bonusId)
+    if (!bonus || bonus.kind === 'multiplier') continue
+    const value = values[bonusId] ?? 0
+    total += bonus.exclusive
+      ? value
+      : value *
+        (diff === null
+          ? 0
+          : bonusMultiplier(diff, round.settings.options.resultMultipliers))
+  }
+  return total
+}
+
 export function confirmDiffToPar(
   round: Round,
   playerId: PlayerId,

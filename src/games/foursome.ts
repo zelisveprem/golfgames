@@ -1,5 +1,6 @@
 import type { PlayerId, Round } from '../types'
-import { teamName } from '../types'
+import { isHoleStarted, teamName } from '../types'
+import { pairNetScoreAt, pairPlayingHandicap, pairStrokesReceived } from '../handicap'
 import type {
   GameDefinition,
   HeaderSummary,
@@ -9,15 +10,13 @@ import type {
 } from './types'
 import { rankRows } from './types'
 import { t } from '../i18n'
-import { formatSideScore } from './shared'
+import { CONCEDED, formatSideScore } from './shared'
 import { SIDE_BET_BONUSES, sideBetSection, withSideBets } from './sideBets'
 import type { MatchSide, MatchState, SideScore } from './match'
 import {
-  bestBallScore,
   compactHeaderNote,
   headerTone,
   holeWinner,
-  individualScore,
   isOutOfPlay,
   matchStateOf,
   sideTone,
@@ -25,45 +24,57 @@ import {
 } from './match'
 
 /**
- * Match play - zápas dvou stran na jamky.
+ * Foursome - jamkovka dvojic, které hrají **jedním míčem** střídavě.
  *
- * Podporované sestavy:
- *   2 hráči - klasický souboj jednotlivců
- *   4 hráči - four-ball, kde za dvojici hraje vždy lepší míč
+ * Proti four-ballu (`matchPlay.ts`) se nevybírá lepší míč: dvojice odpaluje
+ * na jamce jednou a dál se v ranách střídá, takže na jamku má jediné skóre.
+ * Zápas na jamky je pak úplně stejný, a proto stojí na společném jádru
+ * v `match.ts`.
  *
- * Samotná mechanika zápasu (stav, dormie, notace `3&2`, jamky mimo hru) je
- * v `match.ts` a dělí se o ni s Foursome a dvěma jamkovkami ve flightu.
- * Tady zůstává jen to, co je pro four-ball vlastní: strany a lepší míč.
+ * Zápis skóre je jeden na dvojici (`sharedBall`), ale ukládá se každému
+ * partnerovi - `Round.scores` je po hráčích a nový tvar dat by znamenal
+ * migraci archivu (rozhodnutí #33 v docs/decisions.md).
+ *
+ * V kole s HCP dostává dvojice rány z **poloviny součtu** hracích handicapů
+ * obou partnerů, jak to pro foursome dělá WHS.
  */
 
-/** Sestaví dvě strany zápasu podle toho, jestli se hraje ve dvojicích. */
+/** Strany zápasu = obě dvojice v pořadí, ve kterém je kolo nese. */
 function matchSides(round: Round): MatchSide[] {
-  if (round.teams.length === 2) {
-    return round.teams.map((team) => ({
-      id: team.id,
-      name: teamName(round, team),
-      playerIds: team.playerIds,
-    }))
-  }
-  return round.players
-    .slice(0, 2)
-    .map((player) => ({ id: player.id, name: player.name, playerIds: [player.id] }))
+  return round.teams.map((team) => ({
+    id: team.id,
+    name: teamName(round, team),
+    playerIds: team.playerIds,
+  }))
 }
 
-/** Rána strany: u dvojice lepší míč, u jednotlivce jeho netto skóre. */
-const sideScore: SideScore = (round, side, hole) =>
-  side.playerIds.length === 1
-    ? individualScore(round, side, hole)
-    : bestBallScore(round, side, hole)
-
-export type { MatchState } from './match'
+/**
+ * Rána dvojice na jamce.
+ *
+ * Chybějící zápis na rozehrané jamce znamená, že dvojice jamku vzdala -
+ * jediný míč nemá kdo dohrát za ni.
+ */
+const sideScore: SideScore = (round, side, hole) => {
+  if (!isHoleStarted(round, hole)) return null
+  return pairNetScoreAt(round, side.playerIds, hole) ?? CONCEDED
+}
 
 /** Stav zápasu ze zapsaných jamek. */
-export function matchState(round: Round): MatchState {
+export function foursomeState(round: Round): MatchState {
   return matchStateOf(round, matchSides(round), sideScore)
 }
 
-/** Strany pro vedlejší sázku: u čtyř hráčů dvojice, u dvou jednotlivci. */
+/** Rány, které dvojice hráče dostává na jamce - pro tečky ve scorekartě. */
+export function foursomePairStrokes(
+  round: Round,
+  playerId: PlayerId,
+  hole: number,
+): number {
+  const team = round.teams.find((entry) => entry.playerIds.includes(playerId))
+  return team ? pairStrokesReceived(round, team.playerIds, hole) : 0
+}
+
+/** Strany pro vedlejší sázku - u foursome vždycky dvojice. */
 function betSides(round: Round) {
   return matchSides(round).map((side) => ({
     id: side.id,
@@ -72,10 +83,11 @@ function betSides(round: Round) {
   }))
 }
 
-export const matchPlay: GameDefinition = {
-  id: 'match-play',
-  playerCounts: [2, 4],
-  usesTeams: (playerCount) => playerCount === 4,
+export const foursome: GameDefinition = {
+  id: 'foursome',
+  playerCounts: [4],
+  usesTeams: () => true,
+  sharedBall: true,
   scoringOptions: {
     // Extra body jsou tady vedlejší sázka: ve výchozím stavu nulové, takže
     // dokud si je někdo nezapne, hra se chová jako dřív (`sideBets.ts`).
@@ -86,16 +98,17 @@ export const matchPlay: GameDefinition = {
     confirmLongest: true,
     confirmNearest: true,
     bonusesAsSideBet: true,
-    bonusScope: 'player',
+    bonusScope: 'team',
   },
   supportsDoubleHoles: false,
 
   computeStandings(round: Round): StandingsSection[] {
     const sides = matchSides(round)
-    const state = matchState(round)
+    const state = foursomeState(round)
 
     const rows = sides.map((side, index) => {
       const wonHoles = state.won[index === 0 ? 0 : 1]
+      const handicap = pairPlayingHandicap(round, side.playerIds)
 
       return {
         id: side.id,
@@ -103,13 +116,15 @@ export const matchPlay: GameDefinition = {
         value: wonHoles,
         valueLabel: sideValueLabel(state, index),
         detail: t('match.detail', { won: wonHoles, halved: state.halved }),
+        ...(handicap !== 0
+          ? { secondary: t('foursome.pairHandicap', { handicap }) }
+          : {}),
         holesPlayed: wonHoles + state.halved,
       }
     })
 
-    // Extra body nemůžou vstoupit do tabulky zápasu - pořadí v ní drží
-    // vyhrané jamky, ne bunkery. Mají proto vlastní tabulku a do peněz se
-    // přidají v `settlementParties()`.
+    // Extra body patří celé dvojici (jeden míč, jeden zápis) a do tabulky
+    // zápasu se přičíst nemohou - mají vlastní a do peněz vstupují níž.
     const sideBets = sideBetSection(round, betSides(round))
 
     return [
@@ -124,7 +139,7 @@ export const matchPlay: GameDefinition = {
   },
 
   settlementParties(round: Round) {
-    const state = matchState(round)
+    const state = foursomeState(round)
     return withSideBets(
       round,
       betSides(round).map((side, index) => ({
@@ -135,7 +150,7 @@ export const matchPlay: GameDefinition = {
   },
 
   headerSummary(round: Round, hole: number): HeaderSummary {
-    const state = matchState(round)
+    const state = foursomeState(round)
     const outOfPlay = isOutOfPlay(state, hole)
 
     return {
@@ -144,8 +159,6 @@ export const matchPlay: GameDefinition = {
         value: sideValueLabel(state, index),
         tone: sideTone(state, index),
       })),
-      // Stav stran je v barevných UP/DOWN hodnotách; třetí řádek nese jen
-      // počet zbývajících jamek nebo krátkou informaci o dormie/rozhodnutí.
       note: compactHeaderNote(state, outOfPlay),
       tone: headerTone(state, outOfPlay),
     }
@@ -162,11 +175,7 @@ export const matchPlay: GameDefinition = {
 
     const side = sides[winner]
     if (!side || !side.playerIds.includes(playerId)) return {}
-
-    const player = round.players.find((entry) => entry.id === playerId)
-    return player
-      ? { skin: { ariaLabel: t('match.scorecardWonHole', { name: player.name }) } }
-      : {}
+    return { skin: { ariaLabel: t('match.scorecardWonHole', { name: side.name }) } }
   },
 
   holeSummary(round: Round, hole: number): HoleSummary[] {
@@ -174,7 +183,7 @@ export const matchPlay: GameDefinition = {
     const [sideA, sideB] = sides
     if (!sideA || !sideB) return []
 
-    const state = matchState(round)
+    const state = foursomeState(round)
     if (isOutOfPlay(state, hole)) {
       return [
         {
@@ -186,15 +195,6 @@ export const matchPlay: GameDefinition = {
 
     const a = sideScore(round, sideA, hole)
     const b = sideScore(round, sideB, hole)
-
-    // U jednotlivců nemá smysl opakovat ránu, která je vidět v zápisu výš.
-    if (sideA.playerIds.length === 1) {
-      let value = t('common.dash')
-      if (a !== null && b !== null) {
-        value = a === b ? t('match.halved') : a < b ? sideA.name : sideB.name
-      }
-      return [{ id: '_game', entries: [{ label: t('match.takesHole'), value }] }]
-    }
 
     return sides.map((side, index) => {
       const own = index === 0 ? a : b
@@ -208,13 +208,12 @@ export const matchPlay: GameDefinition = {
               ? t('match.takes')
               : t('match.loses')
       }
-      return {
-        id: side.id,
-        entries: [
-          { label: t('match.bestBall'), value: formatSideScore(own) },
-          { label: t('match.hole'), value: outcome },
-        ],
+      const entries = [{ label: t('match.hole'), value: outcome }]
+      // Netto rána dvojice se od zapsané liší, takže se vyplatí ji ukázat.
+      if (pairStrokesReceived(round, side.playerIds, hole) > 0) {
+        entries.unshift({ label: t('foursome.net'), value: formatSideScore(own) })
       }
+      return { id: side.id, entries }
     })
   },
 }

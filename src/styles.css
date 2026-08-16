@@ -8,6 +8,8 @@
   --accent: #4ade80;
   --accent-dark: #16a34a;
   --under: #7dd3fc;
+  /* Informace, ne výsledek - bledě modrá, ať se nemíchá se skóre. */
+  --info: #7dd3fc;
   --over: #fca5a5;
 
   /* Barvy výsledků na jamce. Značka je barevný štítek, číslo v ní má tmavý
@@ -27,6 +29,10 @@
   /* Mezery v trojitém obrysu jsou u černé světlé - kdyby měly barvu podkladu,
      černá značka by na tmavém pozadí splynula a obrys by nebyl vidět. */
   --score-triple-gap: #8a8a8a;
+  /* Pruh pod řádky se součty ve scorekartě. Světlejší než list, ne tmavší -
+     součet má z tabulky vystoupit, ne do ní zapadnout. Sytější tón by
+     soupeřil se značkami skóre, které jsou to hlavní. */
+  --scorecard-summary: #24402e;
   --tap: 48px;
 }
 
@@ -65,10 +71,22 @@ button {
 
 /* --- rozvržení obrazovky ------------------------------------------------ */
 
+/**
+ * Obrazovka je vysoká přesně jako displej a **sama se neposouvá** - roluje
+ * jen obsah uvnitř (`.content`).
+ *
+ * Dřív byla obrazovka vysoká podle obsahu, stránka se posouvala celá
+ * a patička se držela dole přes `position: sticky`. Na iOS v nainstalované
+ * PWA se sticky patička při tažení prstem odlepila: doletěla doprostřed
+ * displeje, zůstala tam a překryla obsah pod sebou. Pevná výška to řeší
+ * v základu - patička je obyčejná položka flexu, kterou nemá co posunout,
+ * protože se pod ní nikdy nic neposouvá.
+ */
 .screen {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   /* Výřez nahoře a home indikátor dole nesmí překrývat ovládání. */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
     env(safe-area-inset-left);
@@ -160,14 +178,19 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Posouvá se obsah, ne stránka - viz `.screen` výš. `min-height: 0` je
+     u položky flexu potřeba, jinak se odmítne zmenšit pod svůj obsah a
+     roloval by se zase celý sloupec. */
+  min-height: 0;
+  overflow-y: auto;
+  /* Přetažení na konci obsahu nemá čím pokračovat dál. */
+  overscroll-behavior: contain;
 }
 
 .app-footer {
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--bg);
-  position: sticky;
-  bottom: 0;
 }
 
 .footer-row {
@@ -696,6 +719,13 @@ button {
   font-weight: 550;
 }
 
+/* Dva samostatné zápasy ve flightu: každý na svém řádku, bez „vs" mezi nimi. */
+.pairing-line.stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .pairing-vs {
   font-size: 13px;
   font-weight: 400;
@@ -822,21 +852,25 @@ button {
   color: var(--tee-contrast);
 }
 
-/* HCP sedí přímo vedle jména, ne na vlastním řádku pod ním - to bylo
-   opticky rozpadnuté (velké prázdné pole daleko od jména). */
-/* HCP je nejvýš dvě číslice a desetina (54, 7,5, 12,2) - nepotřebuje
-   šířku běžného pole. */
-.setup-player-handicap {
-  flex: 0 0 46px;
-  width: 46px;
-  padding: 0 6px;
+/* HCP stojí mezi jménem a odpalištěm, takže musí zůstat úzké - růst má jen
+   jméno. Selektor je zanořený schválně: pole nese i `.name-input`, které
+   o řádek výš dostává `flex: 1`, a to by jinak roztáhlo HCP na půl řádku.
+   Dvě číslice s desetinným místem se do 76 px vejdou i s velkým písmem. */
+.setup-player-main .setup-player-handicap {
+  flex: 0 0 76px;
+  width: 76px;
   text-align: center;
 }
 
+/* Kolik ran hráč dostane: výsledek zadaného HCP, ne další pole. Drobným
+   písmem pod řádek a zarovnané pod HCP (odsazení o šířku praporku
+   odpaliště), ať je vidět, ke kterému poli patří. */
 .setup-player-strokes {
-  margin: 0;
+  display: block;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 13px;
+  text-align: right;
+  padding-inline-end: 48px;
 }
 
 /* Výběr odpaliště: délka, norma a hlavně kolik ran z něj hráč dostane. */
@@ -1023,6 +1057,20 @@ button {
   gap: 10px;
 }
 
+.nav-arrow {
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.nav-arrow:disabled {
+  opacity: 0.3;
+}
+
 .hole-title {
   display: flex;
   flex-direction: column;
@@ -1079,6 +1127,46 @@ button {
   gap: 2px 8px;
 }
 
+/* Víc samostatných zápasů v jednom kole: každý stav na svém řádku, ať je
+   poznat, kterého z nich se dormie nebo konec týká. */
+.game-header-score.stacked {
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Jeden zápas = jeden řádek: jméno a poznámka se umí zkrátit, samotný stav
+   (2 UP, AS) nikdy - ten se nesmí zalomit ani schovat. */
+.game-header-score.stacked .game-header-entry {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.game-header-score.stacked .game-header-entry > span:first-child {
+  max-width: none;
+  flex: 0 1 auto;
+}
+
+.game-header-score.stacked .game-header-entry strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Poznámka u jednoho stavu (dormie, konec zápasu). */
+.game-header-hint {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.game-header-summary.dormie .game-header-hint,
+.game-header-summary.decided .game-header-hint {
+  color: inherit;
+}
+
 .game-header-entry {
   display: inline-flex;
   align-items: baseline;
@@ -1088,10 +1176,11 @@ button {
   font-size: 13px;
 }
 
-/* Šipky pro předchozí/další jamku zmizely z hlavičky (jsou v patičce),
-   takže tu je teď víc místa - jméno se ořezávalo na 72px i tam, kde
-   se celé pohodlně vejde. */
-.game-header-entry span {
+/* Jméno strany zápasu; jen ono se zkracuje, hodnota a poznámka za ním ne.
+   Jedna šipka pro předchozí/další jamku zmizela z hlavičky (je v patičce),
+   takže tu je teď víc místa - jméno se ořezávalo na 72px i tam, kde se
+   celé pohodlně vejde. */
+.game-header-entry > span:first-child {
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1260,6 +1349,10 @@ button {
 }
 
 .team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1269,9 +1362,92 @@ button {
 
 .team-summary {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
   font-size: 13px;
   color: var(--text-dim);
+}
+
+/* Bledě modré „i": otevře rozpis bodů jamky. Není to výsledek, takže má
+   vlastní barvu a nesoutěží s hodnotami vedle sebe. */
+.info-button {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--info) 55%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--info) 16%, transparent);
+  color: var(--info);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* --- rozpis bodů jamky --------------------------------------------------- */
+
+.breakdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.breakdown-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.breakdown-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.breakdown-note {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* Nezískaný bod je vidět, ale nekřičí - „bunker se nepočítal" je taky odpověď. */
+.breakdown-points {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown-row.earned .breakdown-points {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.breakdown-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+
+.breakdown-total strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
 .team-metric strong {
@@ -1305,9 +1481,19 @@ button {
   min-width: 0;
 }
 
+/* Jméno se zkracuje, značky za ním ne: dřív bylo celé jméno i se značkami
+   v jednom oříznutém prvku, takže u dlouhého jména zmizely tečky handicapu
+   i zisk z jamky - tedy právě to, co při zápisu skóre potřebuješ vidět. */
 .player-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-size: 17px;
   font-weight: 600;
+}
+
+.player-name-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2011,6 +2197,36 @@ button {
     inset 0 -1px 0 var(--score-eagle);
 }
 
+/*
+ * Řádky se součty (mezisoučet po devítce i celkový součet v patičce) mají
+ * vlastní tmavší pruh přes celou šířku. Bez něj splývaly s jamkami: střídavý
+ * akcent hráčských sloupců jde skrz celou tabulku a samotné tučné písmo se
+ * v mřížce plné značek ztratí. Pruh musí přebít `.player-col-a/-b`, proto ta
+ * delší selektorová cesta - ne `!important`.
+ */
+.scorecard tbody tr.scorecard-turn-row > th,
+.scorecard tbody tr.scorecard-turn-row > td,
+.scorecard tfoot tr > th,
+.scorecard tfoot tr > td {
+  background: var(--scorecard-summary);
+  font-weight: 700;
+  border-top: 1px solid var(--line);
+}
+
+/* Mezisoučet uzavírá první devítku, takže má linku i pod sebou; patička
+   tabulku končí a spodní linka by tam visela ve vzduchu. */
+.scorecard tbody tr.scorecard-turn-row > th,
+.scorecard tbody tr.scorecard-turn-row > td {
+  border-bottom: 1px solid var(--line);
+}
+
+.scorecard tbody tr.scorecard-turn-row .scorecard-turn-label,
+.scorecard tfoot tr > th {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
 .scorecard-game-total-row {
   border-top: 1px solid var(--line);
 }
@@ -2300,6 +2516,8 @@ button {
 /* Značky u jména hráče: L / N pro Longest a Nearest, ×2 pro double. */
 .player-mark {
   display: inline-flex;
+  /* Značky se nesmí zmenšit ani zmizet, když je jméno dlouhé. */
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   min-width: 18px;
@@ -2779,6 +2997,7 @@ div.course-item {
    se bez `min-width: 0` odmítají zmenšit pod obsah. */
 .player-info,
 .player-name,
+.player-name-text,
 .standing-name,
 .settlement-name,
 .game-header-entry,
@@ -2787,7 +3006,6 @@ div.course-item {
   min-width: 0;
 }
 
-.player-name,
 .standing-name,
 .settlement-name {
   overflow-wrap: anywhere;
