@@ -167,10 +167,12 @@ export const en: Record<MessageKey, Message> = {
 
   // --- playing ------------------------------------------------------------
   'play.backToSetup': 'Back to round setup',
+  'play.openSetup': 'Settings',
   'play.previousHole': 'Previous hole',
   'play.nextHole': 'Next hole',
   'play.hole': 'Hole {number}',
   'play.par': 'Par',
+  'play.parFor': 'Change par for hole {number}',
   'play.noScore': 'no score yet',
   'play.total': '{strokes} strokes · {toPar}',
   'play.bonusesFor': '{name}: extra points',

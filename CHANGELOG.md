@@ -7,6 +7,27 @@ Patch verzi zvedá `scripts/bump-version.mjs` automaticky při každém lokáln�
 buildu, takže čísla patch verzí mezi záznamy nejsou souvislá. Zapisují se sem
 jen verze s věcnou změnou.
 
+## [0.49.0] – 2026-08-18
+
+### Přidáno
+
+- **Kompaktní par jamky pod číslem jamky.** Nahrazuje řádek se 4
+  tlačítky pod hlavičkou, který zabíral místo i tam, kde par určuje
+  hřiště a nedal se změnit. Bez hřiště jde klepnutím na značku (vlaječka
+  - číslo) změnit přes stejný výběrový list jako jinde v appce.
+- **Zápis skóre: tlačítko Nastavení na první jamce.** Šipka nahoře pro
+  návrat na Hru a dvojice zabírala místo i tam, kde nešla použít. Teď je
+  na první jamce v patičce vedle hlavního tlačítka - stejná akce, jen
+  dole. Šipka nahoře zůstává jen při opravě archivovaného kola, kde
+  patička žádnou navigaci nemá.
+
+### Změněno
+
+- **Zápis skóre: jméno hráče na vlastním řádku přes celou šířku.**
+  Dřív bylo vedle stepperu (−/hodnota/+), který zabral tolik místa, že
+  se ořezávalo i krátké příjmení. Ovládání (celkem ran, bonus, +/-) je
+  teď na řádku pod jménem.
+
 ## [0.48.0] – 2026-08-14
 
 ### Změněno

@@ -182,10 +182,12 @@ export const cs = {
 
   // --- zápis skóre --------------------------------------------------------
   'play.backToSetup': 'Zpět na nastavení kola',
+  'play.openSetup': 'Nastavení',
   'play.previousHole': 'Předchozí jamka',
   'play.nextHole': 'Další jamka',
   'play.hole': 'Jamka {number}',
   'play.par': 'Par',
+  'play.parFor': 'Změnit par jamky {number}',
   'play.noScore': 'zatím bez zápisu',
   'play.total': '{strokes} ran · {toPar}',
   'play.bonusesFor': '{name}: extra body',

@@ -1235,19 +1235,23 @@ button {
   white-space: nowrap;
 }
 
-.par-row {
-  display: flex;
+/* Kompaktní značka paru pod číslem jamky - nahrazuje řádek se 4 tlačítky
+   pod hlavičkou, který zabíral místo i tam, kde par určuje hřiště a
+   nedal se změnit. Bez hřiště je to tlačítko (otevře PickSheet), s ním
+   jen popisek. */
+.hole-par-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 3px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.par-label {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
+.hole-par-badge svg {
+  width: 12px;
+  height: 12px;
 }
 
 .hole-setup {
@@ -1465,20 +1469,16 @@ button {
   gap: 10px;
 }
 
+/* Jméno stojí na vlastním řádku přes celou šířku karty - dřív bylo vedle
+   stepperu, který zabral tolik místa, že se ořezávalo i krátké příjmení.
+   Ovládání (celkem, bonus, +/-) je až pod ním na druhém řádku. */
 .player-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 14px;
   border-radius: 14px;
   background: var(--bg-elevated);
-}
-
-.player-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 
 /* Jméno se zkracuje, značky za ním ne: dřív bylo celé jméno i se značkami
@@ -1499,9 +1499,21 @@ button {
   white-space: nowrap;
 }
 
+.player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .player-total {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stepper {
@@ -2995,7 +3007,6 @@ div.course-item {
 
 /* Dlouhé jméno hráče nebo hřiště nesmí roztlačit řádek do šířky. Flex položky
    se bez `min-width: 0` odmítají zmenšit pod obsah. */
-.player-info,
 .player-name,
 .player-name-text,
 .standing-name,

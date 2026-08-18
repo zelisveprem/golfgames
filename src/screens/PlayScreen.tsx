@@ -29,6 +29,8 @@ import {
   strokesReceived,
 } from '../handicap'
 import BonusSheet from './BonusSheet'
+import { TeeFlagIcon } from './icons'
+import PickSheet from './PickSheet'
 import PointsSheet from './PointsSheet'
 import Scorecard from './Scorecard'
 import { useT } from '../i18n'
@@ -104,10 +106,13 @@ export default function PlayScreen({
   const [bonusFor, setBonusFor] = useState<Player | null>(null)
   // Strana, pro kterou je otevřený rozpis bodů jamky.
   const [breakdownFor, setBreakdownFor] = useState<string | null>(null)
+  const [parSheetOpen, setParSheetOpen] = useState(false)
   const showLandscapeScorecard = useMobileLandscape()
   const game = getGame(round.gameId)
   const hole = round.currentHole
   const par = parAt(round, hole)
+  // Hřiště určuje par samo; bez hřiště se zadává ručně po jamkách.
+  const parEditable = round.course === undefined
   const isLastHole = hole === round.holeCount - 1
   const holeDone = isHoleComplete(round, hole)
   // Ukončit jde jen kolo, ve kterém se aspoň něco zapsalo.
@@ -135,8 +140,8 @@ export default function PlayScreen({
    * Rozpis bodů jamky, pokud ho hra umí. „Proč máme tři body" se z hlavičky
    * dvojice přečíst nedá, takže vedle ní stojí modré „i".
    */
-  // Z první jamky nevede šipka na předchozí jamku, ale na nastavení kola.
-  // U opravy archivního kola se nikam neodbočuje, tam zůstává nečinná.
+  // Z první jamky nevede patička na předchozí jamku (žádná není), ale na
+  // nastavení kola. U opravy archivního kola se nikam neodbočuje.
   const backToSetup = hole === 0 && onOpenSetup !== undefined
   const breakdowns: HoleBreakdown[] = game.holeBreakdown?.(round, hole) ?? []
   const openedBreakdown = breakdowns.find((entry) => entry.id === breakdownFor)
@@ -256,43 +261,44 @@ export default function PlayScreen({
 
     return (
       <li key={player.id} className="player-row">
-        <div className="player-info">
-          {/* Jméno se zkracuje, značky ne: u dlouhého jména by se jinak tečky
-              handicapu ani zisk z jamky nevešly a zmizely by úplně. */}
-          <span className="player-name">
-            <span className="player-name-text">{player.name}</span>
-            {marks.map((mark) => (
-              <span key={mark.key} className={`player-mark ${mark.tone}`}>
-                {mark.text}
-              </span>
-            ))}
-            {holeGain?.entries.map((entry) => (
-              <span
-                key={entry.label}
-                className={`player-mark gain${entry.highlight ? ' best' : ''}`}
-                title={entry.label}
-                aria-label={`${entry.label}: ${entry.value}`}
-              >
-                {entry.value}
-              </span>
-            ))}
-            {/* Rány, které hráč na téhle jamce dostává. Bez toho není poznat,
-                proč má za stejný počet ran jiný výsledek než soupeř - a proto
-                se počet teček **nesmí** zastropovat: hráč s HCP 54 dostává na
-                nejtěžších jamkách čtyři rány a tři tečky by tvrdily, že mezi
-                ním a soupeřem je o ránu menší rozdíl, než jaký se opravdu
-                počítá. Scorekarta je vypisuje celé odjakživa. */}
-            {strokesReceived(round, player.id, hole) > 0 && (
-              <span
-                className="player-mark strokes"
-                title={t('play.strokesReceived', {
-                  count: strokesReceived(round, player.id, hole),
-                })}
-              >
-                {'•'.repeat(strokesReceived(round, player.id, hole))}
-              </span>
-            )}
-          </span>
+        {/* Jméno je na vlastním řádku přes celou šířku - vedle stepperu by se
+            ořezávalo i krátké příjmení. Značky se nezkracují ne: u dlouhého
+            jména by se jinak tečky handicapu ani zisk z jamky nevešly. */}
+        <span className="player-name">
+          <span className="player-name-text">{player.name}</span>
+          {marks.map((mark) => (
+            <span key={mark.key} className={`player-mark ${mark.tone}`}>
+              {mark.text}
+            </span>
+          ))}
+          {holeGain?.entries.map((entry) => (
+            <span
+              key={entry.label}
+              className={`player-mark gain${entry.highlight ? ' best' : ''}`}
+              title={entry.label}
+              aria-label={`${entry.label}: ${entry.value}`}
+            >
+              {entry.value}
+            </span>
+          ))}
+          {/* Rány, které hráč na téhle jamce dostává. Bez toho není poznat,
+              proč má za stejný počet ran jiný výsledek než soupeř - a proto
+              se počet teček **nesmí** zastropovat: hráč s HCP 54 dostává na
+              nejtěžších jamkách čtyři rány a tři tečky by tvrdily, že mezi
+              ním a soupeřem je o ránu menší rozdíl, než jaký se opravdu
+              počítá. Scorekarta je vypisuje celé odjakživa. */}
+          {strokesReceived(round, player.id, hole) > 0 && (
+            <span
+              className="player-mark strokes"
+              title={t('play.strokesReceived', {
+                count: strokesReceived(round, player.id, hole),
+              })}
+            >
+              {'•'.repeat(strokesReceived(round, player.id, hole))}
+            </span>
+          )}
+        </span>
+        <div className="player-controls">
           <span className="player-total">
             {played === 0
               ? t('play.noScore')
@@ -301,56 +307,56 @@ export default function PlayScreen({
                   toPar: formatToPar(toPar),
                 })}
           </span>
-        </div>
-        {hasBonusOptions && scoreEntryEnabled && (
-          <button
-            type="button"
-            className={`bonus-button${bonuses.length > 0 ? ' active' : ''}`}
-            onClick={() => setBonusFor(player)}
-            aria-label={t('play.bonusesFor', { name: player.name })}
-          >
-            {bonuses.length > 0 ? (bonusPoints > 0 ? bonusPoints : '•') : '★'}
-          </button>
-        )}
-        <div className="stepper">
-          <button
-            type="button"
-            className="step-button"
-            onClick={() => adjust(player.id, -1)}
-            disabled={!scoreEntryEnabled}
-            aria-label={t('play.minus', { name: player.name })}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="score-value"
-            onClick={() => handleScoreTap(player.id)}
-            disabled={!scoreEntryEnabled}
-            onPointerDown={() => startLongPress(player.id)}
-            onPointerUp={cancelLongPress}
-            onPointerLeave={cancelLongPress}
-            onPointerCancel={cancelLongPress}
-            onContextMenu={(e) => e.preventDefault()}
-            aria-label={t('play.score', { name: player.name })}
-          >
-            {/* Stejná značka jako ve scorekartě, ať je barva výsledku
-                poznat už při zápisu. */}
-            <span
-              className={`mark large ${score === null ? 'empty' : scoreCategory(score, par)}`}
+          {hasBonusOptions && scoreEntryEnabled && (
+            <button
+              type="button"
+              className={`bonus-button${bonuses.length > 0 ? ' active' : ''}`}
+              onClick={() => setBonusFor(player)}
+              aria-label={t('play.bonusesFor', { name: player.name })}
             >
-              {score ?? '–'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="step-button"
-            onClick={() => adjust(player.id, 1)}
-            disabled={!scoreEntryEnabled}
-            aria-label={t('play.plus', { name: player.name })}
-          >
-            +
-          </button>
+              {bonuses.length > 0 ? (bonusPoints > 0 ? bonusPoints : '•') : '★'}
+            </button>
+          )}
+          <div className="stepper">
+            <button
+              type="button"
+              className="step-button"
+              onClick={() => adjust(player.id, -1)}
+              disabled={!scoreEntryEnabled}
+              aria-label={t('play.minus', { name: player.name })}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="score-value"
+              onClick={() => handleScoreTap(player.id)}
+              disabled={!scoreEntryEnabled}
+              onPointerDown={() => startLongPress(player.id)}
+              onPointerUp={cancelLongPress}
+              onPointerLeave={cancelLongPress}
+              onPointerCancel={cancelLongPress}
+              onContextMenu={(e) => e.preventDefault()}
+              aria-label={t('play.score', { name: player.name })}
+            >
+              {/* Stejná značka jako ve scorekartě, ať je barva výsledku
+                  poznat už při zápisu. */}
+              <span
+                className={`mark large ${score === null ? 'empty' : scoreCategory(score, par)}`}
+              >
+                {score ?? '–'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="step-button"
+              onClick={() => adjust(player.id, 1)}
+              disabled={!scoreEntryEnabled}
+              aria-label={t('play.plus', { name: player.name })}
+            >
+              +
+            </button>
+          </div>
         </div>
       </li>
     )
@@ -375,32 +381,32 @@ export default function PlayScreen({
 
     return (
       <li key={team.id} className="player-row">
-        <div className="player-info">
-          <span className="player-name">
-            <span className="player-name-text">
-              {game.teamLabel?.(round, team) ?? teamName(round, team)}
-            </span>
-            {holeGain?.entries.map((entry) => (
-              <span
-                key={entry.label}
-                className={`player-mark gain${entry.highlight ? ' best' : ''}`}
-                title={entry.label}
-                aria-label={`${entry.label}: ${entry.value}`}
-              >
-                {entry.value}
-              </span>
-            ))}
-            {/* Rány dvojice na téhle jamce - u foursome z poloviny součtu HCP.
-                Vypisují se všechny, viz tečky u hráče výš. */}
-            {strokes > 0 && (
-              <span
-                className="player-mark strokes"
-                title={t('play.strokesReceivedPair', { count: strokes })}
-              >
-                {'•'.repeat(strokes)}
-              </span>
-            )}
+        <span className="player-name">
+          <span className="player-name-text">
+            {game.teamLabel?.(round, team) ?? teamName(round, team)}
           </span>
+          {holeGain?.entries.map((entry) => (
+            <span
+              key={entry.label}
+              className={`player-mark gain${entry.highlight ? ' best' : ''}`}
+              title={entry.label}
+              aria-label={`${entry.label}: ${entry.value}`}
+            >
+              {entry.value}
+            </span>
+          ))}
+          {/* Rány dvojice na téhle jamce - u foursome z poloviny součtu HCP.
+              Vypisují se všechny, viz tečky u hráče výš. */}
+          {strokes > 0 && (
+            <span
+              className="player-mark strokes"
+              title={t('play.strokesReceivedPair', { count: strokes })}
+            >
+              {'•'.repeat(strokes)}
+            </span>
+          )}
+        </span>
+        <div className="player-controls">
           <span className="player-total">
             {played === 0
               ? t('play.noScore')
@@ -409,41 +415,41 @@ export default function PlayScreen({
                   toPar: formatToPar(toPar),
                 })}
           </span>
-        </div>
-        <div className="stepper">
-          <button
-            type="button"
-            className="step-button"
-            onClick={() => adjust(first.id, -1)}
-            aria-label={t('play.minus', { name: teamName(round, team) })}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="score-value"
-            onClick={() => handleScoreTap(first.id)}
-            onPointerDown={() => startLongPress(first.id)}
-            onPointerUp={cancelLongPress}
-            onPointerLeave={cancelLongPress}
-            onPointerCancel={cancelLongPress}
-            onContextMenu={(e) => e.preventDefault()}
-            aria-label={t('play.score', { name: teamName(round, team) })}
-          >
-            <span
-              className={`mark large ${score === null ? 'empty' : scoreCategory(score, par)}`}
+          <div className="stepper">
+            <button
+              type="button"
+              className="step-button"
+              onClick={() => adjust(first.id, -1)}
+              aria-label={t('play.minus', { name: teamName(round, team) })}
             >
-              {score ?? '–'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="step-button"
-            onClick={() => adjust(first.id, 1)}
-            aria-label={t('play.plus', { name: teamName(round, team) })}
-          >
-            +
-          </button>
+              −
+            </button>
+            <button
+              type="button"
+              className="score-value"
+              onClick={() => handleScoreTap(first.id)}
+              onPointerDown={() => startLongPress(first.id)}
+              onPointerUp={cancelLongPress}
+              onPointerLeave={cancelLongPress}
+              onPointerCancel={cancelLongPress}
+              onContextMenu={(e) => e.preventDefault()}
+              aria-label={t('play.score', { name: teamName(round, team) })}
+            >
+              <span
+                className={`mark large ${score === null ? 'empty' : scoreCategory(score, par)}`}
+              >
+                {score ?? '–'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="step-button"
+              onClick={() => adjust(first.id, 1)}
+              aria-label={t('play.plus', { name: teamName(round, team) })}
+            >
+              +
+            </button>
+          </div>
         </div>
       </li>
     )
@@ -465,17 +471,21 @@ export default function PlayScreen({
         }`}
       >
         <div className="hole-nav">
-          {/* Na první jamce není kam listovat, ale zpět z ní vede - na krok
-              zakládání kola, odkud se dá změnit hra i dvojice. */}
-          <button
-            type="button"
-            className="nav-arrow"
-            onClick={() => (backToSetup ? onOpenSetup?.() : onGoToHole(hole - 1))}
-            disabled={hole === 0 && !backToSetup}
-            aria-label={backToSetup ? t('play.backToSetup') : t('play.previousHole')}
-          >
-            ‹
-          </button>
+          {/* Živá hra prochází jamky patičkou (Předchozí/Další, na první
+              jamce Nastavení) - šipka by tu jen zabírala místo. Při opravě
+              archivu patička žádnou navigaci nemá (oprava se ukládá
+              napřímo), takže tam šipka zůstává jediná cesta mezi jamkami. */}
+          {editing && (
+            <button
+              type="button"
+              className="nav-arrow"
+              onClick={() => onGoToHole(hole - 1)}
+              disabled={hole === 0}
+              aria-label={t('play.previousHole')}
+            >
+              ‹
+            </button>
+          )}
           <div className="hole-center">
             <div className="hole-title">
               <span
@@ -484,6 +494,26 @@ export default function PlayScreen({
               >
                 {holeNumber(round, hole)}
               </span>
+              {/* Par jamky - dřív vlastní řádek se 4 tlačítky pod hlavičkou,
+                  teď kompaktní značka rovnou pod číslem jamky. Bez hřiště jde
+                  klepnutím změnit, s hřištěm je to jen popisek (par určuje
+                  hřiště samo). */}
+              {parEditable ? (
+                <button
+                  type="button"
+                  className="hole-par-badge"
+                  onClick={() => setParSheetOpen(true)}
+                  aria-label={t('play.parFor', { number: holeNumber(round, hole) })}
+                >
+                  <TeeFlagIcon />
+                  {par}
+                </button>
+              ) : (
+                <span className="hole-par-badge" aria-label={`${t('play.par')} ${par}`}>
+                  <TeeFlagIcon />
+                  {par}
+                </span>
+              )}
             </div>
             {headerSummary && (
               <div className={`game-header-summary ${headerSummary.tone ?? 'normal'}`}>
@@ -534,24 +564,6 @@ export default function PlayScreen({
       </header>
 
       <main className="content">
-        <div className="par-row">
-          <span className="par-label">{t('play.par')}</span>
-          <div className="segmented compact">
-            {PAR_OPTIONS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`segment${value === par ? ' selected' : ''}`}
-                onClick={() => onSetPar(hole, value)}
-                aria-pressed={value === par}
-                disabled={round.course !== undefined}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {holeSetup && (
           <section
             className={`hole-setup${holeSetup.complete ? ' complete' : ''}${
@@ -739,7 +751,7 @@ export default function PlayScreen({
           </button>
         ) : (
           <div className="footer-row">
-            {hole > 0 && (
+            {hole > 0 ? (
               <button
                 type="button"
                 className="secondary-button"
@@ -747,6 +759,17 @@ export default function PlayScreen({
               >
                 {t('play.previousHole')}
               </button>
+            ) : (
+              backToSetup && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={onOpenSetup}
+                  aria-label={t('play.backToSetup')}
+                >
+                  {t('play.openSetup')}
+                </button>
+              )
             )}
             {isLastHole ? (
               <button type="button" className="primary-button" onClick={finish}>
@@ -782,6 +805,19 @@ export default function PlayScreen({
           selected={bonusesAt(round, bonusFor.id, hole)}
           onToggle={(bonusId) => onToggleBonus(bonusFor.id, hole, bonusId)}
           onClose={() => setBonusFor(null)}
+        />
+      )}
+
+      {parSheetOpen && (
+        <PickSheet
+          title={t('play.parFor', { number: holeNumber(round, hole) })}
+          selectedId={String(par)}
+          onSelect={(value) => onSetPar(hole, Number(value))}
+          onClose={() => setParSheetOpen(false)}
+          options={PAR_OPTIONS.map((value) => ({
+            id: String(value),
+            label: String(value),
+          }))}
         />
       )}
     </div>
